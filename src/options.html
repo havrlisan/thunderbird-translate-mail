@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font: message-box; padding: 8px 12px; min-width: 320px; }
+    label { display: block; margin: 0 0 12px; }
+    label > span { display: block; margin-bottom: 4px; }
+    input, select { width: 100%; box-sizing: border-box; }
+    p { color: GrayText; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <label><span data-i18n="optProvider"></span><select id="provider"></select></label>
+  <div id="fields"></div>
+  <label><span data-i18n="optTarget"></span><select id="target"></select></label>
+  <button id="clearCache" data-i18n="clearCache"></button> <span id="status"></span>
+  <p data-i18n="optionsHint"></p>
+  <script type="module" src="options.js"></script>
+</body>
+</html>
