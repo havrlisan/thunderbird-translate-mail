@@ -109,7 +109,7 @@ test('HTTP errors become an Error with status and body excerpt', async () => {
   const f = fakeFetch({ message: 'Invalid key' }, 403);
   await assert.rejects(
     PROVIDERS.google.translate(['x'], 'en', { apiKey: 'bad' }, f),
-    (e) => e.message.startsWith('HTTP 403') && e.message.includes('Invalid key'),
+    (e) => e.status === 403 && e.message.startsWith('HTTP 403') && e.message.includes('Invalid key'),
   );
 });
 

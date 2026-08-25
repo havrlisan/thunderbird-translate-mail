@@ -28,6 +28,24 @@ messenger.messageDisplay.onMessagesDisplayed.addListener((tab) => {
   setButton(tab.id, t('translate'), '').catch(console.error);
 });
 
+// Explain a failed translation in a small popup window; the button itself stays "Translate".
+async function showError(e) {
+  const { provider } = await messenger.storage.local.get('provider');
+  const name = PROVIDERS[provider]?.name ?? provider;
+  const status = e.status;
+  const key =
+    status === 401 || status === 403 ? (provider === 'microsoft' ? 'errorAuthMicrosoft' : 'errorAuth')
+    : status === 429 || status === 456 ? 'errorQuota' // 456 = DeepL quota exceeded
+    : status ? 'errorHttp'
+    : e instanceof TypeError ? 'errorNetwork' // fetch() rejects with TypeError when the host is unreachable
+    : 'errorGeneric';
+  const params = new URLSearchParams({ title: t('error'), text: t(key, [name, String(status ?? '')]), details: e.message });
+  await messenger.windows.create({
+    url: `${messenger.runtime.getURL('src/error.html')}?${params}`,
+    type: 'popup', width: 480, height: 240, allowScriptsToClose: true,
+  });
+}
+
 messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
   const tabId = tab.id;
   if (inFlight.has(tabId)) return;
@@ -81,7 +99,8 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
     await setButton(tabId, t('showOriginal'), badge);
   } catch (e) {
     console.error(e);
-    await setButton(tabId, `${t('error')}: ${e.message}`.slice(0, 80), '!');
+    await setButton(tabId, t('translate'), '');
+    await showError(e);
   } finally {
     inFlight.delete(tabId);
   }

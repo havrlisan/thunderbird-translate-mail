@@ -33,7 +33,7 @@ async function postJson(fetchFn, url, headers, body) {
     headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`), { status: res.status });
   return res.json();
 }
 
