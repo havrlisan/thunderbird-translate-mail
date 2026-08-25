@@ -35,7 +35,7 @@ if (!globalThis.__translateMail) {
     if (subject) {
       subjectEl ??= Object.assign(document.createElement('div'), {
         textContent: api.i18n.getMessage('subjectLine', subject),
-        style: 'font-weight:bold;margin:0 0 1em;padding:0 0 .5em;border-bottom:1px solid #ccc',
+        style: 'font-weight:bold;margin:0 0 1em;padding:0 0 .5em;border-bottom:1px solid currentColor',
       });
       document.body.prepend(subjectEl);
     }

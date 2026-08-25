@@ -5,6 +5,11 @@
   "version": "0.1.0",
   "author": "Luka Havrlisan",
   "default_locale": "en",
+  "icons": {
+    "16": "icons/translate.svg",
+    "32": "icons/translate.svg",
+    "64": "icons/translate.svg"
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "translate-mail@luka-havrlisan",

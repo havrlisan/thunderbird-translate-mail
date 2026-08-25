@@ -14,6 +14,9 @@ function languageName(code) {
 // Detected Source Language per tab, so toggling back and forth keeps the badge.
 const detectedByTab = new Map();
 
+// Tabs with a click already being handled; a second click would race the first.
+const inFlight = new Set();
+
 async function setButton(tabId, title, badge) {
   await messenger.messageDisplayAction.setTitle({ tabId, title });
   await messenger.messageDisplayAction.setBadgeText({ tabId, text: badge });
@@ -22,11 +25,13 @@ async function setButton(tabId, title, badge) {
 // A newly displayed message is a fresh document: the content script state is gone, reset the button too.
 messenger.messageDisplay.onMessagesDisplayed.addListener((tab) => {
   detectedByTab.delete(tab.id);
-  setButton(tab.id, t('translate'), '');
+  setButton(tab.id, t('translate'), '').catch(console.error);
 });
 
 messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
   const tabId = tab.id;
+  if (inFlight.has(tabId)) return;
+  inFlight.add(tabId);
   try {
     const { provider, target = 'en', creds = {}, cache = {} } =
       await messenger.storage.local.get(['provider', 'target', 'creds', 'cache']);
@@ -75,6 +80,9 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
     await messenger.tabs.sendMessage(tabId, { cmd: 'apply', subject: hit.subject, texts: hit.texts });
     await setButton(tabId, t('showOriginal'), badge);
   } catch (e) {
-    await setButton(tabId, `${t('error')}: ${e.message}`, '!');
+    console.error(e);
+    await setButton(tabId, `${t('error')}: ${e.message}`.slice(0, 80), '!');
+  } finally {
+    inFlight.delete(tabId);
   }
 });

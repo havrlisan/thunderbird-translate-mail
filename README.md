@@ -11,7 +11,7 @@ Thunderbird add-on (128+) that adds a **Translate** button to the message header
 
 Message text is sent to the selected Provider **only when you click Translate**. Translations are cached locally (200 most recent) so reopening a message is free.
 
-Not every Provider supports every target language (e.g. DeepL has no Croatian target); unsupported combinations show the Provider's error in the button tooltip.
+Not every Provider supports every target language; unsupported combinations show the Provider's error in the button tooltip.
 
 ## Install for development
 

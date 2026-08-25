@@ -1,7 +1,14 @@
 // Every Provider auto-detects the Source Language and returns it with the Translation.
 // Each `translate` handles ONE request; `translateAll` chunks and concatenates.
 
-export const LIMITS = { maxItems: 50, maxChars: 20000 }; // under every Provider's per-request limit
+export const LIMITS = { maxItems: 50, maxChars: 10000 }; // Yandex caps a request at 10 000 chars; the others allow more
+
+// The Provider detects per item; the longest input is the most reliable sample.
+function longestIndex(texts) {
+  let best = 0;
+  for (let i = 1; i < texts.length; i++) if (texts[i].length > texts[best].length) best = i;
+  return best;
+}
 
 export function chunk(texts, { maxItems, maxChars } = LIMITS) {
   const out = [];
@@ -32,6 +39,14 @@ async function postJson(fetchFn, url, headers, body) {
 
 // DeepL wants regional variants for these; everything else is the upper-cased ISO code.
 const DEEPL_TARGET = { en: 'EN-US', pt: 'PT-PT' };
+// Microsoft rejects plain `zh`/`sr`; Google and Yandex know Norwegian as `no`.
+const MICROSOFT_TARGET = { zh: 'zh-Hans', sr: 'sr-Latn' };
+const GOOGLE_TARGET = { nb: 'no' };
+const YANDEX_TARGET = { nb: 'no' };
+
+// Google v2 escapes HTML entities even with format=text.
+const decodeEntities = (s) =>
+  s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 
 export const PROVIDERS = {
   google: {
@@ -39,19 +54,19 @@ export const PROVIDERS = {
     fields: ['apiKey'],
     async translate(texts, target, creds, fetchFn) {
       const url = `https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(creds.apiKey)}`;
-      const data = await postJson(fetchFn, url, {}, { q: texts, target, format: 'text' });
+      const data = await postJson(fetchFn, url, {}, { q: texts, target: GOOGLE_TARGET[target] ?? target, format: 'text' });
       const t = data.data.translations;
-      return { texts: t.map((x) => x.translatedText), detected: t[0]?.detectedSourceLanguage };
+      return { texts: t.map((x) => decodeEntities(x.translatedText)), detected: t[longestIndex(texts)]?.detectedSourceLanguage };
     },
   },
   microsoft: {
     name: 'Microsoft Translator',
     fields: ['apiKey', 'region'],
     async translate(texts, target, creds, fetchFn) {
-      const url = `https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=${encodeURIComponent(target)}`;
+      const url = `https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=${encodeURIComponent(MICROSOFT_TARGET[target] ?? target)}`;
       const headers = { 'Ocp-Apim-Subscription-Key': creds.apiKey, 'Ocp-Apim-Subscription-Region': creds.region };
       const data = await postJson(fetchFn, url, headers, texts.map((Text) => ({ Text })));
-      return { texts: data.map((x) => x.translations[0].text), detected: data[0]?.detectedLanguage?.language };
+      return { texts: data.map((x) => x.translations[0].text), detected: data[longestIndex(texts)]?.detectedLanguage?.language };
     },
   },
   deepl: {
@@ -61,16 +76,16 @@ export const PROVIDERS = {
       const host = creds.apiKey.endsWith(':fx') ? 'api-free.deepl.com' : 'api.deepl.com';
       const body = { text: texts, target_lang: DEEPL_TARGET[target] ?? target.toUpperCase() };
       const data = await postJson(fetchFn, `https://${host}/v2/translate`, { Authorization: `DeepL-Auth-Key ${creds.apiKey}` }, body);
-      return { texts: data.translations.map((x) => x.text), detected: data.translations[0]?.detected_source_language?.toLowerCase() };
+      return { texts: data.translations.map((x) => x.text), detected: data.translations[longestIndex(texts)]?.detected_source_language?.toLowerCase() };
     },
   },
   yandex: {
     name: 'Yandex Translate',
     fields: ['apiKey', 'folderId'],
     async translate(texts, target, creds, fetchFn) {
-      const body = { folderId: creds.folderId, texts, targetLanguageCode: target };
+      const body = { folderId: creds.folderId, texts, targetLanguageCode: YANDEX_TARGET[target] ?? target };
       const data = await postJson(fetchFn, 'https://translate.api.cloud.yandex.net/translate/v2/translate', { Authorization: `Api-Key ${creds.apiKey}` }, body);
-      return { texts: data.translations.map((x) => x.text), detected: data.translations[0]?.detectedLanguageCode };
+      return { texts: data.translations.map((x) => x.text), detected: data.translations[longestIndex(texts)]?.detectedLanguageCode };
     },
   },
 };
@@ -78,12 +93,13 @@ export const PROVIDERS = {
 export async function translateAll(providerId, texts, target, creds, fetchFn = fetch) {
   const provider = PROVIDERS[providerId];
   const out = [];
-  let detected;
+  let best = { detected: undefined, len: -1 }; // keep the detection from the chunk holding the longest text
   for (const part of chunk(texts)) {
     const r = await provider.translate(part, target, creds, fetchFn);
     if (r.texts.length !== part.length) throw new Error(`Provider returned ${r.texts.length} translations for ${part.length} texts`);
     out.push(...r.texts);
-    detected ??= r.detected;
+    const len = part[longestIndex(part)]?.length ?? -1;
+    if (len > best.len) best = { detected: r.detected, len };
   }
-  return { texts: out, detected: (detected || '').toLowerCase().split('-')[0] };
+  return { texts: out, detected: (best.detected || '').toLowerCase().split('-')[0] };
 }
