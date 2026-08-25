@@ -1,0 +1,79 @@
+import { PROVIDERS, translateAll } from './providers.js';
+import { cacheKey, cachePut } from './cache.js';
+
+const t = (key, subs) => messenger.i18n.getMessage(key, subs);
+
+function languageName(code) {
+  try {
+    return new Intl.DisplayNames([messenger.i18n.getUILanguage()], { type: 'language' }).of(code);
+  } catch {
+    return code;
+  }
+}
+
+// Detected Source Language per tab, so toggling back and forth keeps the badge.
+const detectedByTab = new Map();
+
+async function setButton(tabId, title, badge) {
+  await messenger.messageDisplayAction.setTitle({ tabId, title });
+  await messenger.messageDisplayAction.setBadgeText({ tabId, text: badge });
+}
+
+// A newly displayed message is a fresh document: the content script state is gone, reset the button too.
+messenger.messageDisplay.onMessagesDisplayed.addListener((tab) => {
+  detectedByTab.delete(tab.id);
+  setButton(tab.id, t('translate'), '');
+});
+
+messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
+  const tabId = tab.id;
+  try {
+    const { provider, target = 'en', creds = {}, cache = {} } =
+      await messenger.storage.local.get(['provider', 'target', 'creds', 'cache']);
+    const p = PROVIDERS[provider];
+    const c = creds[provider] ?? {};
+    if (!p || p.fields.some((f) => !c[f])) {
+      await messenger.runtime.openOptionsPage();
+      return;
+    }
+
+    await messenger.scripting.executeScript({ target: { tabId }, files: ['src/text.js', 'src/content.js'] });
+    const state = await messenger.tabs.sendMessage(tabId, { cmd: 'toggle' });
+    if (!state.texts) {
+      // Toggled an existing Translation on or off.
+      await setButton(tabId, t(state.shown ? 'showOriginal' : 'translate'), detectedByTab.get(tabId) ?? '');
+      return;
+    }
+
+    const [msg] = (await messenger.messageDisplay.getDisplayedMessages(tabId)).messages;
+    const subject = (msg.subject ?? '').trim();
+    if (!subject && state.texts.length === 0) {
+      await setButton(tabId, t('nothingToTranslate'), '');
+      return;
+    }
+
+    const key = cacheKey(msg.headerMessageId, provider, target);
+    let hit = cache[key];
+    if (!hit) {
+      await setButton(tabId, t('translating'), '…');
+      const input = subject ? [subject, ...state.texts] : state.texts;
+      const r = await translateAll(provider, input, target, c);
+      hit = subject
+        ? { subject: r.texts[0], texts: r.texts.slice(1), detected: r.detected }
+        : { subject: '', texts: r.texts, detected: r.detected };
+      // ponytail: read-modify-write of the whole cache; concurrent clicks in two tabs can drop one entry. Fine for a cache.
+      await messenger.storage.local.set({ cache: cachePut(cache, key, hit, Date.now()) });
+    }
+
+    const badge = hit.detected.toUpperCase();
+    detectedByTab.set(tabId, badge);
+    if (hit.detected === target) {
+      await setButton(tabId, t('alreadyIn', languageName(target)), '=');
+      return;
+    }
+    await messenger.tabs.sendMessage(tabId, { cmd: 'apply', subject: hit.subject, texts: hit.texts });
+    await setButton(tabId, t('showOriginal'), badge);
+  } catch (e) {
+    await setButton(tabId, `${t('error')}: ${e.message}`, '!');
+  }
+});
