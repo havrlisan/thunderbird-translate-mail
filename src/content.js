@@ -30,7 +30,7 @@ if (!globalThis.__translateMail) {
   function apply({ subject, texts }) {
     nodes.forEach((n, i) => {
       const [lead, , trail] = splitWhitespace(originals[i]);
-      n.nodeValue = lead + texts[i] + trail;
+      n.nodeValue = lead + (texts[i] ?? splitWhitespace(originals[i])[1]) + trail;
     });
     if (subject) {
       subjectEl ??= Object.assign(document.createElement('div'), {

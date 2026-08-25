@@ -54,6 +54,7 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
 
     const key = cacheKey(msg.headerMessageId, provider, target);
     let hit = cache[key];
+    if (hit && hit.texts.length !== state.texts.length) hit = undefined; // body renders differently now (e.g. plain text vs HTML)
     if (!hit) {
       await setButton(tabId, t('translating'), '…');
       const input = subject ? [subject, ...state.texts] : state.texts;
