@@ -747,7 +747,7 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
 Run: `node --check src/content.js && node --check src/background.js && echo ok`
 Expected: `ok`
 
-- [ ] **Step 4: Manual smoke test in Thunderbird** (executor: do this only if you can run Thunderbird; otherwise record "not run" in your report — the user will do it)
+- [x] **Step 4: Manual smoke test in Thunderbird** (executor: do this only if you can run Thunderbird; otherwise record "not run" in your report — the user will do it)
 
 1. Thunderbird → Tools → Add-ons and Themes → gear → Debug Add-ons → Load Temporary Add-on → pick `manifest.json`.
 2. Open a message. A **Translate** button appears in the message header toolbar.

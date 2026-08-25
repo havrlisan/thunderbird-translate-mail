@@ -47,7 +47,7 @@ Glossary: see `CONTEXT.md` (Provider, Target Language, Source Language, Translat
 - v3: auto-translate on open, privacy consent/exclusions, auto-showing cached Translation. Not planned: ad-hoc language picker, keyless Provider.
 
 ## Known gaps after v1 review (2026-08-25)
-- Manual Thunderbird smoke test not yet run (GUI only). If `executeScript` fails to reach the message body, try `allFrames: true`; if `fetch` fails as a temporary add-on, grant host permissions in the Add-ons Manager Permissions tab.
+- Manual Thunderbird smoke test passed 2026-08-25 (TB 154.0, DeepL): translate / show original / cache / message switch / same-language badge all OK with the default `executeScript` call and temporary-add-on host permissions. Yandex and Google not yet exercised end-to-end.
 - `translateAll` reports `''` detection if the longest chunk's Provider response lacks it (blank badge, translation still applies).
 - `chunk()` never splits a single oversized text node; the whole cache blob is (de)serialised per click; in-flight guard has no timeout; `LIMITS.maxChars` not pinned by a test.
 - Switching messages mid-translation shows an error badge once (self-heals on next click); `collect()` runs once per document; empty `messages` list → error badge.
