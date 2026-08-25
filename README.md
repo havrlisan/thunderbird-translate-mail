@@ -13,6 +13,10 @@ Message text is sent to the selected Provider **only when you click Translate**.
 
 Not every Provider supports every target language; unsupported combinations show the Provider's error in a popup window.
 
+## Install
+
+Install from [addons.thunderbird.net](https://addons.thunderbird.net/thunderbird/addon/translate-mail/).
+
 ## Install for development
 
 Thunderbird → Tools → Add-ons and Themes → gear icon → **Debug Add-ons** → **Load Temporary Add-on** → choose `manifest.json`. Then open the add-on's Preferences, pick a Provider, paste the key, choose the target language.
