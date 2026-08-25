@@ -3,6 +3,7 @@ for (const id of ['title', 'text', 'details']) document.getElementById(id).textC
 const close = document.getElementById('close');
 close.textContent = messenger.i18n.getMessage('close');
 close.addEventListener('click', () => window.close());
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') window.close(); });
 close.focus();
 
 (async () => {

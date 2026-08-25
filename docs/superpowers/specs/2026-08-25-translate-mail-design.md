@@ -8,9 +8,9 @@ Glossary: see `CONTEXT.md` (Provider, Target Language, Source Language, Translat
 
 ## Button
 - `message_display_action` in the message header toolbar.
-- Click → translate subject + body into the configured Target Language. Title becomes "Show original"; click again restores the Original (toggle).
+- Click → translate subject + body into the configured Target Language. Click again restores the Original (toggle).
 - Button label becomes "Show original", tooltip "Translated from <language> — click to show the original"; a lighter "Translated: <from> → <to>" line is prepended under the translated subject. If Source == Target: Original stays, label "Already in <language>". No badge (the red pill looked like an alert).
-- No banner is inserted into the message.
+- No banner is inserted into the message other than the translated-subject/note block.
 
 ## Rendering
 - A content script injected into the displayed message collects the body's text nodes (skipping `<script>`/`<style>`, whitespace-only nodes), sends the trimmed strings to the background, and writes translations back in place, preserving leading/trailing whitespace. Markup is never sent to a Provider.
@@ -49,7 +49,7 @@ Glossary: see `CONTEXT.md` (Provider, Target Language, Source Language, Translat
 ## Known gaps after v1 review (2026-08-25)
 - Manual Thunderbird smoke test passed 2026-08-25 (TB 154.0, DeepL): translate / show original / cache / message switch / same-language badge all OK with the default `executeScript` call and temporary-add-on host permissions. Microsoft and Google also verified end-to-end the same day; Yandex deliberately left untested (no credentials).
 - Failures open a popup window (`src/error.html`) with a status-specific explanation. Under the System-auto theme it stays light even when Thunderbird is dark: `theme.getCurrent()` returns no colours and extension pages get a light `prefers-color-scheme`. Accepted for v1.
-- `translateAll` reports `''` detection if the longest chunk's Provider response lacks it (tooltip says "Translated from " with an empty name, translation still applies).
+- `translateAll` reports `''` detection if the longest chunk's Provider response lacks it (tooltip and body note show an empty Source Language name, translation still applies; same after a background restart while a Translation is shown).
 - `chunk()` never splits a single oversized text node; the whole cache blob is (de)serialised per click; in-flight guard has no timeout; `LIMITS.maxChars` not pinned by a test.
 - Switching messages mid-translation shows the error popup once (self-heals on next click); `collect()` runs once per document; empty `messages` list → error popup.
 - Options: half-typed keys are persisted (auto-save); "Cache cleared" never auto-clears; `Intl.DisplayNames.of` unguarded.

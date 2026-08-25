@@ -32,7 +32,7 @@ async function postJson(fetchFn, url, headers, body) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
-  });
+  }).catch((e) => { throw Object.assign(e, { network: true }); }); // host unreachable, DNS, TLS…
   if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`), { status: res.status });
   return res.json();
 }

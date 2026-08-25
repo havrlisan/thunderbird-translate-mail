@@ -113,6 +113,11 @@ test('HTTP errors become an Error with status and body excerpt', async () => {
   );
 });
 
+test('fetch rejections are tagged as network errors', async () => {
+  const f = async () => { throw new TypeError('NetworkError when attempting to fetch resource.'); };
+  await assert.rejects(PROVIDERS.deepl.translate(['x'], 'en', { apiKey: 'k:fx' }, f), (e) => e.network === true);
+});
+
 test('translateAll chunks, concatenates and takes detection from the chunk with the longest text', async () => {
   const calls = [];
   // The chunk holding the long text detects zh-CN, every other chunk detects fr.
