@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="context-stroke" fill-opacity="context-fill-opacity">
-  <path d="M1 2h6v1.5H5.6c-.3 1.6-1 3-1.9 4.1.6.5 1.3.9 2 1.2l-.5 1.4c-.9-.3-1.7-.8-2.4-1.5-.7.7-1.5 1.2-2.4 1.5L0 8.8c.7-.3 1.4-.7 2-1.2C1.4 6.8 1 6 .8 5.2h1.5c.2.5.5 1 .8 1.4.6-.8 1.1-1.8 1.3-3.1H1z"/>
-  <path d="M10.5 6h1.7L16 15h-1.7l-.9-2.5h-3.7L8.8 15H7.1zm-.3 5h2.8L11.6 7.5z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <style>svg { --c: #18181b; } @media (prefers-color-scheme: dark) { svg { --c: #f4f4f5; } }</style>
+  <path fill-rule="evenodd" d="M7.5 5.5h3l4 10h-2.5l-.9-2.5H6.9L6 15.5H3.5zm1.1 2.2-1 3h2.8z" style="fill:var(--c);stroke:var(--c)" fill-opacity=".2" stroke-linejoin="round"/>
+  <path d="M1 1.5h6V3H5.6c-.3 1.4-.9 2.6-1.7 3.6.5.4 1.1.7 1.7 1L5.1 9c-.8-.3-1.5-.7-2.1-1.3C2.4 8.3 1.7 8.7.9 9L.4 7.6c.6-.3 1.2-.6 1.7-1C1.5 5.9 1.1 5.2.9 4.4h1.5c.2.5.4.9.7 1.3.5-.7.9-1.6 1.1-2.7H1z" style="fill:var(--c)"/>
 </svg>
