@@ -44,6 +44,6 @@ $('clearCache').addEventListener('click', async () => {
 
 const s = await messenger.storage.local.get({ provider: 'deepl', target: 'en', creds: {} });
 creds = s.creds;
-$('provider').value = s.provider;
+$('provider').value = PROVIDERS[s.provider] ? s.provider : 'deepl';
 $('target').value = s.target;
 renderFields();
