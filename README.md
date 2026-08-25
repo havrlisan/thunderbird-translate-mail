@@ -25,10 +25,8 @@ npm test
 
 ## Package
 
-From PowerShell in the repo root:
-
 ```
-Compress-Archive -Force -Path manifest.json,_locales,icons,src -DestinationPath translate-mail.zip
+python scripts/package.py
 ```
 
-Rename to `.xpi` or upload the `.zip` to addons.thunderbird.net.
+Writes `translate-mail-<version>.xpi` in the repo root (PowerShell's `Compress-Archive` is avoided on purpose: it writes backslash entry names, which Thunderbird rejects). Upload the `.xpi` to addons.thunderbird.net, or install it locally via Add-ons and Themes → gear → Install Add-on From File.
