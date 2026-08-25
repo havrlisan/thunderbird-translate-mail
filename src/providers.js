@@ -81,6 +81,7 @@ export async function translateAll(providerId, texts, target, creds, fetchFn = f
   let detected;
   for (const part of chunk(texts)) {
     const r = await provider.translate(part, target, creds, fetchFn);
+    if (r.texts.length !== part.length) throw new Error(`Provider returned ${r.texts.length} translations for ${part.length} texts`);
     out.push(...r.texts);
     detected ??= r.detected;
   }

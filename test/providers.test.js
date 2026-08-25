@@ -105,6 +105,17 @@ test('translateAll chunks, concatenates and normalises detected language', async
   assert.equal(r.detected, 'zh');
 });
 
+test('translateAll rejects when a provider returns fewer translations than requested', async () => {
+  const fetchFn = async (url, init) => {
+    const q = JSON.parse(init.body).q;
+    return { ok: true, status: 200, json: async () => ({ data: { translations: q.slice(1).map((s) => ({ translatedText: s.toUpperCase(), detectedSourceLanguage: 'de' })) } }) };
+  };
+  await assert.rejects(
+    translateAll('google', ['Hallo', 'Welt'], 'en', { apiKey: 'K' }, fetchFn),
+    (e) => e.message.includes('2 texts') && e.message.includes('1 translations'),
+  );
+});
+
 test('translateAll with no texts makes no calls and returns empty detected', async () => {
   const r = await translateAll('google', [], 'en', { apiKey: 'K' }, async () => { throw new Error('should not be called'); });
   assert.deepEqual(r, { texts: [], detected: '' });
