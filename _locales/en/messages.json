@@ -1,0 +1,19 @@
+{
+  "extName": { "message": "Translate Mail" },
+  "extDescription": { "message": "Translate the message you are reading into your language using Google, Microsoft, DeepL or Yandex." },
+  "translate": { "message": "Translate" },
+  "showOriginal": { "message": "Show original" },
+  "translating": { "message": "Translating…" },
+  "alreadyIn": { "message": "Already in $LANG$", "placeholders": { "LANG": { "content": "$1" } } },
+  "nothingToTranslate": { "message": "Nothing to translate" },
+  "error": { "message": "Translation failed" },
+  "subjectLine": { "message": "Subject: $SUBJECT$", "placeholders": { "SUBJECT": { "content": "$1" } } },
+  "optProvider": { "message": "Provider" },
+  "optTarget": { "message": "Translate into" },
+  "clearCache": { "message": "Clear translation cache" },
+  "cacheCleared": { "message": "Cache cleared" },
+  "field_apiKey": { "message": "API key" },
+  "field_region": { "message": "Azure region (e.g. westeurope)" },
+  "field_folderId": { "message": "Yandex Cloud folder ID" },
+  "optionsHint": { "message": "Settings are saved automatically. Message text is sent to the selected Provider only when you click Translate." }
+}
