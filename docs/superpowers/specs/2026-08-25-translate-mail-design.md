@@ -25,7 +25,7 @@ Glossary: see `CONTEXT.md` (Provider, Target Language, Source Language, Translat
 | DeepL | `POST https://api-free.deepl.com/v2/translate` (key ending `:fx`) or `https://api.deepl.com/v2/translate` | apiKey |
 | Yandex Translate v2 | `POST https://translate.api.cloud.yandex.net/translate/v2/translate` | apiKey, folderId |
 - No keyless Provider. Source Language is auto-detected by the Provider and returned with the translation.
-- Requests are chunked (≤50 strings, ≤20 000 chars per request) to stay under every Provider's limits.
+- Requests are chunked (≤50 strings, ≤10 000 chars per request — Yandex has the lowest cap) to stay under every Provider's limits. Source Language is taken from the longest string in the batch.
 
 ## Options page
 - Provider dropdown; credential fields only for the selected Provider; Target Language dropdown from a static list of ISO 639-1 codes with names from `Intl.DisplayNames`; "Clear cache" button.
