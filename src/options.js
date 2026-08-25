@@ -2,7 +2,7 @@ import { PROVIDERS } from './providers.js';
 import { LANGUAGES } from './languages.js';
 
 const $ = (id) => document.getElementById(id);
-const t = (key) => messenger.i18n.getMessage(key);
+const t = (key, subs) => messenger.i18n.getMessage(key, subs);
 
 for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
 
@@ -32,7 +32,7 @@ function renderFields() {
     });
     label.append(input);
     return label;
-  }));
+  }), Object.assign(document.createElement('a'), { href: PROVIDERS[id].help, target: '_blank', textContent: t('getKey', PROVIDERS[id].name) }));
 }
 
 $('provider').addEventListener('change', () => { renderFields(); save(); });

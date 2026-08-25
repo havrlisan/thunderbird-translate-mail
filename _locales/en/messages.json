@@ -24,5 +24,6 @@
   "field_apiKey": { "message": "API key" },
   "field_region": { "message": "Azure region (e.g. westeurope)" },
   "field_folderId": { "message": "Yandex Cloud folder ID" },
+  "getKey": { "message": "Where do I get $PROVIDER$ credentials? ↗", "placeholders": { "PROVIDER": { "content": "$1" } } },
   "optionsHint": { "message": "Settings are saved automatically. Message text is sent to the selected Provider only when you click Translate." }
 }

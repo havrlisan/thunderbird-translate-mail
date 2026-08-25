@@ -51,6 +51,7 @@ const decodeEntities = (s) =>
 export const PROVIDERS = {
   google: {
     name: 'Google Cloud Translation',
+    help: 'https://console.cloud.google.com/apis/credentials',
     fields: ['apiKey'],
     async translate(texts, target, creds, fetchFn) {
       const url = `https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(creds.apiKey)}`;
@@ -61,6 +62,7 @@ export const PROVIDERS = {
   },
   microsoft: {
     name: 'Microsoft Translator',
+    help: 'https://portal.azure.com/#create/Microsoft.CognitiveServicesTextTranslation',
     fields: ['apiKey', 'region'],
     async translate(texts, target, creds, fetchFn) {
       const url = `https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=${encodeURIComponent(MICROSOFT_TARGET[target] ?? target)}`;
@@ -71,6 +73,7 @@ export const PROVIDERS = {
   },
   deepl: {
     name: 'DeepL',
+    help: 'https://www.deepl.com/your-account/keys',
     fields: ['apiKey'],
     async translate(texts, target, creds, fetchFn) {
       const host = creds.apiKey.endsWith(':fx') ? 'api-free.deepl.com' : 'api.deepl.com';
@@ -81,6 +84,7 @@ export const PROVIDERS = {
   },
   yandex: {
     name: 'Yandex Translate',
+    help: 'https://console.cloud.yandex.com/',
     fields: ['apiKey', 'folderId'],
     async translate(texts, target, creds, fetchFn) {
       const body = { folderId: creds.folderId, texts, targetLanguageCode: YANDEX_TARGET[target] ?? target };
