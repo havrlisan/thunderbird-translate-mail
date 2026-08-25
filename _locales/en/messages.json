@@ -14,6 +14,8 @@
   "errorNetwork": { "message": "Could not reach $PROVIDER$. Check your internet connection.", "placeholders": { "PROVIDER": { "content": "$1" } } },
   "errorGeneric": { "message": "Something went wrong while translating with $PROVIDER$.", "placeholders": { "PROVIDER": { "content": "$1" } } },
   "close": { "message": "Close" },
+  "translatedFrom": { "message": "Translated from $LANG$ — click to show the original", "placeholders": { "LANG": { "content": "$1" } } },
+  "translatedNote": { "message": "Translated: $FROM$ → $TO$", "placeholders": { "FROM": { "content": "$1" }, "TO": { "content": "$2" } } },
   "subjectLine": { "message": "Subject: $SUBJECT$", "placeholders": { "SUBJECT": { "content": "$1" } } },
   "optProvider": { "message": "Provider" },
   "optTarget": { "message": "Translate into" },

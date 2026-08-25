@@ -7,9 +7,9 @@ if (!globalThis.__translateMail) {
 
   let nodes = [];          // text nodes in document order
   let originals = [];      // their Original nodeValue
-  let translation = null;  // last applied { subject, texts }
+  let translation = null;  // last applied { subject, texts, note }
   let shown = false;
-  let subjectEl = null;
+  let headerEl = null;     // prepended block: translated subject + "Translated: X → Y" note
 
   function collect() {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
@@ -27,31 +27,34 @@ if (!globalThis.__translateMail) {
     return originals.map((s) => splitWhitespace(s)[1]);
   }
 
-  function apply({ subject, texts }) {
+  function line(text, style) {
+    return Object.assign(document.createElement('div'), { textContent: text, style });
+  }
+
+  function apply({ subject, texts, note }) {
     nodes.forEach((n, i) => {
       const [lead, , trail] = splitWhitespace(originals[i]);
       n.nodeValue = lead + (texts[i] ?? splitWhitespace(originals[i])[1]) + trail;
     });
-    if (subject) {
-      subjectEl ??= Object.assign(document.createElement('div'), {
-        textContent: api.i18n.getMessage('subjectLine', subject),
-        style: 'font-weight:bold;margin:0 0 1em;padding:0 0 .5em;border-bottom:1px solid currentColor',
-      });
-      document.body.prepend(subjectEl);
+    if (!headerEl) {
+      headerEl = line('', 'margin:0 0 1em;padding:0 0 .5em;border-bottom:1px solid currentColor');
+      if (subject) headerEl.append(line(api.i18n.getMessage('subjectLine', subject), 'font-weight:bold'));
+      if (note) headerEl.append(line(note, 'opacity:.7;font-size:.9em'));
     }
+    document.body.prepend(headerEl);
     shown = true;
   }
 
   function restore() {
     nodes.forEach((n, i) => { n.nodeValue = originals[i]; });
-    subjectEl?.remove();
+    headerEl?.remove();
     shown = false;
   }
 
   api.runtime.onMessage.addListener((msg) => {
     switch (msg.cmd) {
       case 'apply':
-        translation = { subject: msg.subject, texts: msg.texts };
+        translation = { subject: msg.subject, texts: msg.texts, note: msg.note };
         apply(translation);
         return Promise.resolve({ shown: true });
       case 'toggle':

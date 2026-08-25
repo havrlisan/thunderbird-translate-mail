@@ -11,21 +11,26 @@ function languageName(code) {
   }
 }
 
-// Detected Source Language per tab, so toggling back and forth keeps the badge.
+// Detected Source Language per tab, so toggling back and forth keeps the tooltip.
 const detectedByTab = new Map();
 
 // Tabs with a click already being handled; a second click would race the first.
 const inFlight = new Set();
 
-async function setButton(tabId, title, badge) {
+// label = button text, title = tooltip.
+async function setButton(tabId, label, title = label) {
+  await messenger.messageDisplayAction.setLabel({ tabId, label });
   await messenger.messageDisplayAction.setTitle({ tabId, title });
-  await messenger.messageDisplayAction.setBadgeText({ tabId, text: badge });
+}
+
+function showOriginalButton(tabId, from) {
+  return setButton(tabId, t('showOriginal'), t('translatedFrom', languageName(from)));
 }
 
 // A newly displayed message is a fresh document: the content script state is gone, reset the button too.
 messenger.messageDisplay.onMessagesDisplayed.addListener((tab) => {
   detectedByTab.delete(tab.id);
-  setButton(tab.id, t('translate'), '').catch(console.error);
+  setButton(tab.id, t('translate')).catch(console.error);
 });
 
 // Explain a failed translation in a small popup window; the button itself stays "Translate".
@@ -64,14 +69,15 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
     const state = await messenger.tabs.sendMessage(tabId, { cmd: 'toggle' });
     if (!state.texts) {
       // Toggled an existing Translation on or off.
-      await setButton(tabId, t(state.shown ? 'showOriginal' : 'translate'), detectedByTab.get(tabId) ?? '');
+      if (state.shown) await showOriginalButton(tabId, detectedByTab.get(tabId) ?? '');
+      else await setButton(tabId, t('translate'));
       return;
     }
 
     const [msg] = (await messenger.messageDisplay.getDisplayedMessages(tabId)).messages;
     const subject = (msg.subject ?? '').trim();
     if (!subject && state.texts.length === 0) {
-      await setButton(tabId, t('nothingToTranslate'), '');
+      await setButton(tabId, t('nothingToTranslate'));
       return;
     }
 
@@ -79,7 +85,7 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
     let hit = cache[key];
     if (hit && hit.texts.length !== state.texts.length) hit = undefined; // body renders differently now (e.g. plain text vs HTML)
     if (!hit) {
-      await setButton(tabId, t('translating'), '…');
+      await setButton(tabId, t('translating'));
       const input = subject ? [subject, ...state.texts] : state.texts;
       const r = await translateAll(provider, input, target, c);
       hit = subject
@@ -89,17 +95,17 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
       await messenger.storage.local.set({ cache: cachePut(cache, key, hit, Date.now()) });
     }
 
-    const badge = hit.detected.toUpperCase();
-    detectedByTab.set(tabId, badge);
+    detectedByTab.set(tabId, hit.detected);
     if (hit.detected === target) {
-      await setButton(tabId, t('alreadyIn', languageName(target)), '=');
+      await setButton(tabId, t('alreadyIn', languageName(target)));
       return;
     }
-    await messenger.tabs.sendMessage(tabId, { cmd: 'apply', subject: hit.subject, texts: hit.texts });
-    await setButton(tabId, t('showOriginal'), badge);
+    const note = t('translatedNote', [languageName(hit.detected), languageName(target)]);
+    await messenger.tabs.sendMessage(tabId, { cmd: 'apply', subject: hit.subject, texts: hit.texts, note });
+    await showOriginalButton(tabId, hit.detected);
   } catch (e) {
     console.error(e);
-    await setButton(tabId, t('translate'), '');
+    await setButton(tabId, t('translate'));
     await showError(e);
   } finally {
     inFlight.delete(tabId);
