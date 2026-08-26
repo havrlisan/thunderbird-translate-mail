@@ -24,6 +24,12 @@
     "default_title": "__MSG_translate__",
     "default_icon": "icons/translate.svg"
   },
+  "commands": {
+    "_execute_message_display_action": {
+      "suggested_key": { "default": "Alt+Shift+T" },
+      "description": "__MSG_translate__"
+    }
+  },
   "options_ui": {
     "page": "src/options.html"
   },
