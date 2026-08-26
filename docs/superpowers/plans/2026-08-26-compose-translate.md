@@ -555,6 +555,131 @@ Report anything off; fix before Task 6.
 
 ---
 
+### Task 5b: Round-trip keeps edits (amendment after the Task 5 smoke test)
+
+Luka's smoke test: translate, edit the translated text, "Show original" → the edits were gone. Spec amended (sections "`content.js` changes" and "Limitations"): `restore` snapshots the current text into the remembered Translation; `toggle` re-applies it only while the Original is unchanged; the `reuse` flag is removed.
+
+**Files:**
+- Modify: `src/content.js`
+- Modify: `src/background.js` (drop `reuse: false`)
+
+**Interfaces:**
+- Consumes: `{ cmd: 'toggle', skipQuoted, settingsKey }` from both sides; `reuse` is no longer read.
+- Produces: unchanged reply shapes. Behavior: after `restore`, a `toggle` with the same `settingsKey` re-applies the Translation (with any edits made to it) if the walk finds the same text nodes with the Original texts; otherwise returns fresh `texts`.
+
+No unit test (DOM); covered by the smoke items in Task 6.
+
+- [ ] **Step 1: Split the walk out of `collect`**
+
+In `src/content.js`, replace the whole `collect` function (from `function collect(skipQuoted) {` to its closing `}`) with:
+
+```js
+  // Text nodes worth translating, in document order.
+  function walk(skipQuoted) {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) =>
+        !SKIP_TAGS.has(n.parentNode?.nodeName) && shouldTranslate(n.nodeValue) &&
+        !(skipQuoted && n.parentElement?.closest(SKIP_SELECTOR))
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT,
+    });
+    const out = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) out.push(n);
+    return out;
+  }
+
+  function collect(found) {
+    nodes = found;
+    originals = nodes.map((n) => n.nodeValue);
+    return originals.map((s) => unwrap(splitWhitespace(s)[1]));
+  }
+
+  // The Original is as it was when last shown: same text nodes with the same text. Edits, new paragraphs and
+  // editor rewrites all count as changes and get a fresh translation.
+  const unchanged = (found) => found.length === nodes.length && found.every((n, i) => n.nodeValue === originals[i]);
+```
+
+- [ ] **Step 2: `restore` keeps edits made to the Translation**
+
+Replace
+
+```js
+  function restore() {
+    nodes.forEach((n, i) => { n.nodeValue = originals[i]; });
+```
+
+with
+
+```js
+  function restore() {
+    // Snapshot the text as it is now, so edits made to the Translation come back with it.
+    translation.texts = nodes.map((n) => splitWhitespace(n.nodeValue)[1]);
+    nodes.forEach((n, i) => { n.nodeValue = originals[i]; });
+```
+
+- [ ] **Step 3: `toggle` without the `reuse` flag**
+
+Replace
+
+```js
+      case 'toggle':
+        if (shown) { restore(); return Promise.resolve({ shown: false }); }
+        // A compose draft may have changed since; the compose side passes reuse:false and always re-collects.
+        if (msg.reuse !== false && translation && settingsKey === msg.settingsKey) { apply(translation); return Promise.resolve({ shown: true }); }
+        return Promise.resolve({ shown: false, texts: collect(msg.skipQuoted) });
+```
+
+with
+
+```js
+      case 'toggle': {
+        if (shown) { restore(); return Promise.resolve({ shown: false }); }
+        const found = walk(msg.skipQuoted);
+        if (translation && settingsKey === msg.settingsKey && unchanged(found)) {
+          nodes = found;
+          apply(translation);
+          return Promise.resolve({ shown: true });
+        }
+        return Promise.resolve({ shown: false, texts: collect(found) });
+      }
+```
+
+- [ ] **Step 4: Background drops the flag**
+
+In `src/background.js` `composeTranslate`, change
+
+```js
+    const state = await messenger.tabs.sendMessage(tabId, { cmd: 'toggle', skipQuoted: true, reuse: false, settingsKey });
+```
+
+to
+
+```js
+    const state = await messenger.tabs.sendMessage(tabId, { cmd: 'toggle', skipQuoted: true, settingsKey });
+```
+
+- [ ] **Step 5: Checks**
+
+Run: `node --check src/content.js && node --check src/background.js && npm test`
+Expected: no syntax errors; 26/26 PASS. `grep -n reuse src/content.js src/background.js` prints nothing.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/content.js src/background.js
+git commit -m "content: Show original keeps edits to the Translation; re-apply only while the Original is unchanged"
+```
+
+- [ ] **Step 7: STOP — human check (Luka)**
+
+Reload the temporary add-on. In a compose window:
+1. Translate → edit a translated sentence → Show original → your original text is back → Translate → the translation comes back **with your edit**, instantly.
+2. Show original → edit the original → Translate → a fresh translation of the edited text ("Translating…", Provider call).
+3. Show original → add a new paragraph → Translate → the new paragraph is translated too.
+4. Reading side: Translate / Show original / Translate on a message → second Translate is instant as in 0.2.0.
+
+---
+
 ### Task 6: Docs, roadmap, version, package
 
 **Files:**
@@ -566,7 +691,7 @@ Report anything off; fix before Task 6.
 After the paragraph starting "The button is also bound to **Ctrl+Shift+X**", insert:
 
 ```markdown
-In a compose window, the **Translate reply** button translates what you wrote into the language of the message you are answering (preselected when you translated that message; pick any language otherwise). Quoted text and your signature are left alone, the subject is not touched, and **Show original** brings your text back. Ctrl+Z does not undo a translation.
+In a compose window, the **Translate reply** button translates what you wrote into the language of the message you are answering (preselected when you translated that message; pick any language otherwise). Quoted text and your signature are left alone, the subject is not touched, and **Show original** brings your text back — and **Translate** brings the translation back with any edits you made to it, without another Provider call, as long as the original text was not changed in between. Ctrl+Z does not undo a translation.
 ```
 
 Change the first sentence of the README from "…adds a **Translate** button to the message header toolbar." to "…adds a **Translate** button to the message header toolbar and a **Translate reply** button to the compose toolbar."
@@ -609,6 +734,7 @@ Install `translate-mail-0.3.0.xpi` via Add-ons and Themes → gear → Install A
 2. **Reply, known language** → translate a foreign message on the reading side, Reply → **Translate reply** button → popup preselects that Source Language → Translate → your text translated in place; quoted block, `On … wrote:` and signature untouched; nothing inserted above your text; status `Translated: X → Y`, button `Show original`.
 3. **Show original** → your text back exactly; status empty.
 4. **Edit then re-translate** → change your text, Translate → new text translated.
+4b. **Edits survive the round trip** → Translate, edit a translated sentence, Show original, Translate → the edited translation is back instantly (no Provider call).
 5. **New message** → language preselected to the last one used.
 6. **Already in** → draft in the picked language → `Already in <language>`, untouched.
 7. **Empty draft** → `Nothing to translate`.

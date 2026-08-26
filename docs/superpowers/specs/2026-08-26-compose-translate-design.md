@@ -24,7 +24,7 @@ Roadmap item 10. Glossary: see `CONTEXT.md`. Builds on the v1 design (`2026-08-2
 ## Translating the draft
 - Background handler for `composeTranslate`, guarded by the same `inFlight` set as the reading side:
   1. Load settings (`loadSettings()` extracted from the click handler; both paths use it). Missing credentials → `runtime.openOptionsPage()`, reply `{ error: 'setupFirst' }`.
-  2. `scripting.executeScript({ target: { tabId }, files: ['src/text.js', 'src/content.js'] })` into the compose tab, then `tabs.sendMessage(tabId, { cmd: 'toggle', skipQuoted: true, reuse: false, settingsKey })`.
+  2. `scripting.executeScript({ target: { tabId }, files: ['src/text.js', 'src/content.js'] })` into the compose tab, then `tabs.sendMessage(tabId, { cmd: 'toggle', skipQuoted: true, settingsKey })`.
      - `{ shown: false }` without `texts` → the draft was restored; reply `{ shown: false }`.
      - `texts` empty → reply `{ error: 'nothingToTranslate' }`.
   3. `translateAll(provider, texts, lang, creds)`. `detected === lang` → reply `{ alreadyIn: lang }`, draft untouched.
@@ -38,11 +38,12 @@ Roadmap item 10. Glossary: see `CONTEXT.md`. Builds on the v1 design (`2026-08-2
 
 ## `content.js` changes (shared with the reading side)
 - `apply`: create the header block only when `subject || note` is non-empty — otherwise an empty bordered `<div>` would be inserted into the draft. Reading side is unaffected (it always passes a note).
-- `toggle`: honour `msg.reuse === false` by skipping the "re-apply last Translation" branch, so compose always re-collects and re-translates the current text.
+- `restore`: before writing the Original back, snapshot the current text of every node into the remembered Translation, so edits made to the Translation survive a round trip.
+- `toggle` (not shown): walk the document; re-apply the remembered Translation without a Provider call only if the settings match and the walk finds the same number of text nodes with exactly the Original texts ("unchanged"); otherwise collect and return `texts` for a fresh translation. Edits to the Original, new paragraphs and editor rewrites all count as changes. No `reuse` flag: this one rule serves both sides (message documents never change, so the reading side behaves as before).
 - New `state` command → `{ shown }`.
 
 ## Limitations (documented, not fought)
-- "Show original" restores the text nodes that still exist; text the user retyped after translating stays as typed. Ctrl+Z does not undo a translation (the editor does not track script edits).
+- "Show original" and "Translate" round-trip without loss (amended 2026-08-26 after the smoke test: edits to the Translation used to be discarded by "Show original"): edits to the Translation come back with it; edits to the Original trigger a fresh translation, dropping the previous one. Only changes to leading/trailing whitespace inside a text node are lost. Ctrl+Z does not undo a translation (the editor does not track script edits).
 - The plain-text compose editor is the same HTML editor internally; quoted blocks and signatures use the same markup, so the same selectors apply. Not separately handled.
 - Reopened drafts (`type: 'draft'`) have no related original; the suggestion falls back to `replyLang`.
 - A compose tab closed mid-translation surfaces as an error reply to a popup that no longer exists. Harmless.
@@ -54,4 +55,4 @@ Roadmap item 10. Glossary: see `CONTEXT.md`. Builds on the v1 design (`2026-08-2
 - `node --test`: `cachedDetected` (hit, miss, prefix must match the whole id).
 - Plan task 1, before anything else: confirm in TB 154 that `scripting.executeScript` reaches a compose tab with the `compose` permission (temporary add-on, a one-line script). If it does not, stop and switch to the fallback: `getComposeDetails().body` → `DOMParser` → text nodes → `setComposeDetails({ body })`, with a `>`-line path for plain text.
 - Checked 2026-08-26 on TB 154 (temporary add-on, `compose` permission): `scripting.executeScript` reaches the compose editor for HTML reply, plain-text reply and new message; `blockquote[type=cite]` / `.moz-cite-prefix` / `.moz-signature` are present in both HTML and plain-text compose documents. Mechanism confirmed; no fallback needed.
-- Manual smoke test: HTML reply, plain-text reply, new mail (no related message → last-used language), draft with signature, "Already in", toggle back, error with a bad key, popup closed mid-translation.
+- Manual smoke test: HTML reply, plain-text reply, new mail (no related message → last-used language), draft with signature, "Already in", toggle back, edit the Translation then toggle back and forth (edits kept), edit the Original then Translate (fresh translation), error with a bad key, popup closed mid-translation.
