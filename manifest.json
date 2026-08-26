@@ -24,6 +24,10 @@
     "default_title": "__MSG_translate__",
     "default_icon": "icons/translate.svg"
   },
+  "compose_action": {
+    "default_title": "__MSG_translateReply__",
+    "default_icon": "icons/translate.svg"
+  },
   "commands": {
     "_execute_message_display_action": {
       "suggested_key": { "default": "Ctrl+Shift+X" },
@@ -33,7 +37,7 @@
   "options_ui": {
     "page": "src/options.html"
   },
-  "permissions": ["messagesRead", "scripting", "storage"],
+  "permissions": ["messagesRead", "scripting", "storage", "compose"],
   "host_permissions": [
     "https://translation.googleapis.com/*",
     "https://api.cognitive.microsofttranslator.com/*",
