@@ -53,4 +53,5 @@ Roadmap item 10. Glossary: see `CONTEXT.md`. Builds on the v1 design (`2026-08-2
 ## Verification
 - `node --test`: `cachedDetected` (hit, miss, prefix must match the whole id).
 - Plan task 1, before anything else: confirm in TB 154 that `scripting.executeScript` reaches a compose tab with the `compose` permission (temporary add-on, a one-line script). If it does not, stop and switch to the fallback: `getComposeDetails().body` → `DOMParser` → text nodes → `setComposeDetails({ body })`, with a `>`-line path for plain text.
+- Checked 2026-08-26 on TB 154 (temporary add-on, `compose` permission): `scripting.executeScript` reaches the compose editor for HTML reply, plain-text reply and new message; `blockquote[type=cite]` / `.moz-cite-prefix` / `.moz-signature` are present in both HTML and plain-text compose documents. Mechanism confirmed; no fallback needed.
 - Manual smoke test: HTML reply, plain-text reply, new mail (no related message → last-used language), draft with signature, "Already in", toggle back, error with a bad key, popup closed mid-translation.
