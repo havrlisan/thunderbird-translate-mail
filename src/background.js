@@ -169,7 +169,7 @@ async function composeTranslate(tabId, lang) {
     }
     await inject(tabId);
     const settingsKey = `${provider}|${lang}`;
-    const state = await messenger.tabs.sendMessage(tabId, { cmd: 'toggle', skipQuoted: true, reuse: false, settingsKey });
+    const state = await messenger.tabs.sendMessage(tabId, { cmd: 'toggle', skipQuoted: true, settingsKey });
     if (!state.texts) return { shown: false }; // restored the Original
     if (state.texts.length === 0) return { error: 'nothingToTranslate' };
     const r = await translateAll(provider, state.texts, lang, s.creds);

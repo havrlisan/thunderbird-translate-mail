@@ -12,7 +12,8 @@ if (!globalThis.__translateMail) {
   let shown = false;
   let headerEl = null;     // prepended block: translated subject + "Translated: X → Y" note
 
-  function collect(skipQuoted) {
+  // Text nodes worth translating, in document order.
+  function walk(skipQuoted) {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) =>
         !SKIP_TAGS.has(n.parentNode?.nodeName) && shouldTranslate(n.nodeValue) &&
@@ -20,14 +21,20 @@ if (!globalThis.__translateMail) {
           ? NodeFilter.FILTER_ACCEPT
           : NodeFilter.FILTER_REJECT,
     });
-    nodes = [];
-    originals = [];
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-      nodes.push(n);
-      originals.push(n.nodeValue);
-    }
+    const out = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) out.push(n);
+    return out;
+  }
+
+  function collect(found) {
+    nodes = found;
+    originals = nodes.map((n) => n.nodeValue);
     return originals.map((s) => unwrap(splitWhitespace(s)[1]));
   }
+
+  // The Original is as it was when last shown: same text nodes with the same text. Edits, new paragraphs and
+  // editor rewrites all count as changes and get a fresh translation.
+  const unchanged = (found) => found.length === nodes.length && found.every((n, i) => n.nodeValue === originals[i]);
 
   function line(text, style) {
     return Object.assign(document.createElement('div'), { textContent: text, style });
@@ -48,6 +55,8 @@ if (!globalThis.__translateMail) {
   }
 
   function restore() {
+    // Snapshot the text as it is now, so edits made to the Translation come back with it.
+    translation.texts = nodes.map((n) => splitWhitespace(n.nodeValue)[1]);
     nodes.forEach((n, i) => { n.nodeValue = originals[i]; });
     headerEl?.remove();
     shown = false;
@@ -60,11 +69,16 @@ if (!globalThis.__translateMail) {
         settingsKey = msg.settingsKey;
         apply(translation);
         return Promise.resolve({ shown: true });
-      case 'toggle':
+      case 'toggle': {
         if (shown) { restore(); return Promise.resolve({ shown: false }); }
-        // A compose draft may have changed since; the compose side passes reuse:false and always re-collects.
-        if (msg.reuse !== false && translation && settingsKey === msg.settingsKey) { apply(translation); return Promise.resolve({ shown: true }); }
-        return Promise.resolve({ shown: false, texts: collect(msg.skipQuoted) });
+        const found = walk(msg.skipQuoted);
+        if (translation && settingsKey === msg.settingsKey && unchanged(found)) {
+          nodes = found;
+          apply(translation);
+          return Promise.resolve({ shown: true });
+        }
+        return Promise.resolve({ shown: false, texts: collect(found) });
+      }
       case 'state':
         return Promise.resolve({ shown });
       default:
