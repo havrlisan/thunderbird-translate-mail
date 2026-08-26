@@ -1,4 +1,4 @@
-import { PROVIDERS, translateAll } from './providers.js';
+import { PROVIDERS, translateAll, errorKey } from './providers.js';
 import { cacheKey, cachePut } from './cache.js';
 
 const t = (key, subs) => messenger.i18n.getMessage(key, subs);
@@ -36,14 +36,7 @@ messenger.messageDisplay.onMessagesDisplayed.addListener((tab) => {
 // Explain a failed translation in a small popup window; the button itself stays "Translate".
 async function showError(e, provider) {
   const name = PROVIDERS[provider]?.name ?? String(provider);
-  const status = e.status;
-  const key =
-    status === 401 || status === 403 ? (provider === 'microsoft' ? 'errorAuthMicrosoft' : 'errorAuth')
-    : status === 429 || status === 456 ? 'errorQuota' // 456 = DeepL quota exceeded
-    : status ? 'errorHttp'
-    : e.network ? 'errorNetwork'
-    : 'errorGeneric';
-  const params = new URLSearchParams({ title: t('error'), text: t(key, [name, String(status ?? '')]), details: e.message });
+  const params = new URLSearchParams({ title: t('error'), text: t(errorKey(e, provider), [name, String(e.status ?? '')]), details: e.message });
   await messenger.windows.create({
     url: `${messenger.runtime.getURL('src/error.html')}?${params}`,
     type: 'popup', width: 480, height: 240, allowScriptsToClose: true,

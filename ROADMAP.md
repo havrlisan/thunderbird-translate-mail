@@ -4,13 +4,8 @@ Ideas for future releases, roughly ordered by value ÷ effort within each sectio
 
 Already settled elsewhere and deliberately not listed: auto-translate on open, privacy consent / sender exclusions, auto-showing cached Translations (all deferred to v3); an ad-hoc Target Language picker (not planned); HTML-mode translation (never — text nodes only).
 
-## Translation quality
-
-3. **Per-item language detection.** Bilingual mail (e.g. English body, Croatian quoted reply) currently reports one Source Language from the longest item. Pass per-item `detected` through and report "already in target" only when all items are.
-
 ## UX
 
-4. **"Test" button in Options.** Send `"Hello"` with the current credentials and show ✓ or the error next to the fields, so a wrong key is caught at setup rather than on the first click. Reuses `showError`'s status mapping.
 5. **Keyboard shortcut.** Manifest only: `"commands": { "_execute_message_display_action": { "suggested_key": { "default": "Ctrl+Shift+T" } } }`. Rebindable in Thunderbird's shortcut manager.
 6. **Translate selection only.** Context menu on selected message text → "Translate selection". Same in-place text-node mechanism, restricted to nodes intersecting the selection. Needs the `menus` permission.
 7. **Show DeepL usage.** `GET /v2/usage` returns `character_count` / `character_limit`; show "312 400 / 500 000 characters used this month" in Options. DeepL only — the other Providers don't expose it.
@@ -25,10 +20,11 @@ Already settled elsewhere and deliberately not listed: auto-translate on open, p
 
 ## Small polish
 
+- **Per-item language detection.** Bilingual mail (e.g. English body, Croatian quoted reply) currently reports one Source Language from the longest item. Pass per-item `detected` through and report "already in target" only when all items are. Demoted: mild since quoted text is skipped by default, and bilingual mail says the same thing twice; needs a real report before touching detection.
 - Cache key falls back to `msg.id` (or skips caching) when `headerMessageId` is missing, so such messages don't all collide on one key.
 - Extend `LANGUAGES` (e.g. `ca`, `fa`, `hi`, `ms`, `bn`); `Intl.DisplayNames` already names any code and Provider errors cover unsupported ones.
 - `error.html` popup → `notifications.create()` for the common "network down" case would be less intrusive, at the cost of the details text. Leave unless it annoys.
 
 ## Suggested next release
 
-4 + 5: all small, improve either quality or first-run experience, none touch the settled decisions. Plan 10 as the v2 headline.
+5 (manifest-only). Plan 10 as the v2 headline.

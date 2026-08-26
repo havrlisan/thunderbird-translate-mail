@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PROVIDERS, chunk, translateAll, LIMITS } from '../src/providers.js';
+import { PROVIDERS, chunk, translateAll, LIMITS, errorKey } from '../src/providers.js';
 
 // Fake fetch: records calls, answers with the given JSON body.
 function fakeFetch(body, status = 200) {
@@ -150,4 +150,14 @@ test('translateAll rejects when a provider returns fewer translations than reque
 test('translateAll with no texts makes no calls and returns empty detected', async () => {
   const r = await translateAll('google', [], 'en', { apiKey: 'K' }, async () => { throw new Error('should not be called'); });
   assert.deepEqual(r, { texts: [], detected: '' });
+});
+
+test('errorKey maps HTTP status / network failures to the i18n message key', () => {
+  assert.equal(errorKey({ status: 401 }, 'deepl'), 'errorAuth');
+  assert.equal(errorKey({ status: 403 }, 'microsoft'), 'errorAuthMicrosoft');
+  assert.equal(errorKey({ status: 429 }, 'google'), 'errorQuota');
+  assert.equal(errorKey({ status: 456 }, 'deepl'), 'errorQuota');
+  assert.equal(errorKey({ status: 500 }, 'deepl'), 'errorHttp');
+  assert.equal(errorKey({ network: true }, 'deepl'), 'errorNetwork');
+  assert.equal(errorKey(new Error('x'), 'deepl'), 'errorGeneric');
 });

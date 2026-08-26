@@ -1,4 +1,4 @@
-import { PROVIDERS } from './providers.js';
+import { PROVIDERS, translateAll, errorKey } from './providers.js';
 import { LANGUAGES } from './languages.js';
 
 const $ = (id) => document.getElementById(id);
@@ -38,6 +38,25 @@ function renderFields() {
 $('provider').addEventListener('change', () => { renderFields(); save(); });
 $('target').addEventListener('change', save);
 $('quoted').addEventListener('change', save);
+// One billable "Hello" against the current credentials, so a wrong key is caught here rather than on the first click.
+$('test').addEventListener('click', async () => {
+  const id = $('provider').value;
+  const c = creds[id] ?? {};
+  const status = $('testStatus');
+  status.title = '';
+  if (PROVIDERS[id].fields.some((f) => !c[f])) { status.textContent = t('testMissing'); return; }
+  $('test').disabled = true;
+  status.textContent = t('testing');
+  try {
+    const r = await translateAll(id, ['Hello'], $('target').value, c);
+    status.textContent = t('testOk', r.texts[0]);
+  } catch (e) {
+    status.textContent = t(errorKey(e, id), [PROVIDERS[id].name, String(e.status ?? '')]);
+    status.title = e.message;
+  } finally {
+    $('test').disabled = false;
+  }
+});
 $('clearCache').addEventListener('click', async () => {
   await messenger.storage.local.remove('cache');
   $('status').textContent = t('cacheCleared');

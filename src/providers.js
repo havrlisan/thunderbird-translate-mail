@@ -94,6 +94,16 @@ export const PROVIDERS = {
   },
 };
 
+// i18n key explaining a failed request; `e` comes from postJson (status / network) or is anything else.
+export function errorKey(e, providerId) {
+  const status = e.status;
+  return status === 401 || status === 403 ? (providerId === 'microsoft' ? 'errorAuthMicrosoft' : 'errorAuth')
+    : status === 429 || status === 456 ? 'errorQuota' // 456 = DeepL quota exceeded
+    : status ? 'errorHttp'
+    : e.network ? 'errorNetwork'
+    : 'errorGeneric';
+}
+
 export async function translateAll(providerId, texts, target, creds, fetchFn = fetch) {
   const provider = PROVIDERS[providerId];
   const out = [];
