@@ -3,7 +3,7 @@
 if (!globalThis.__translateMail) {
   globalThis.__translateMail = true;
   const api = globalThis.messenger ?? globalThis.browser; // content scripts: be safe about which global exists
-  const { splitWhitespace, shouldTranslate, SKIP_TAGS } = globalThis.TM_TEXT;
+  const { splitWhitespace, shouldTranslate, SKIP_TAGS, SKIP_SELECTOR } = globalThis.TM_TEXT;
 
   let nodes = [];          // text nodes in document order
   let originals = [];      // their Original nodeValue
@@ -11,10 +11,11 @@ if (!globalThis.__translateMail) {
   let shown = false;
   let headerEl = null;     // prepended block: translated subject + "Translated: X → Y" note
 
-  function collect() {
+  function collect(skipQuoted) {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) =>
-        !SKIP_TAGS.has(n.parentNode?.nodeName) && shouldTranslate(n.nodeValue)
+        !SKIP_TAGS.has(n.parentNode?.nodeName) && shouldTranslate(n.nodeValue) &&
+        !(skipQuoted && n.parentElement?.closest(SKIP_SELECTOR))
           ? NodeFilter.FILTER_ACCEPT
           : NodeFilter.FILTER_REJECT,
     });
@@ -60,7 +61,7 @@ if (!globalThis.__translateMail) {
       case 'toggle':
         if (shown) { restore(); return Promise.resolve({ shown: false }); }
         if (translation) { apply(translation); return Promise.resolve({ shown: true }); }
-        return Promise.resolve({ shown: false, texts: collect() });
+        return Promise.resolve({ shown: false, texts: collect(msg.skipQuoted) });
       default:
         return undefined;
     }

@@ -19,6 +19,7 @@
   "subjectLine": { "message": "Subject: $SUBJECT$", "placeholders": { "SUBJECT": { "content": "$1" } } },
   "optProvider": { "message": "Provider" },
   "optTarget": { "message": "Translate into" },
+  "optQuoted": { "message": "Also translate quoted text and signatures" },
   "clearCache": { "message": "Clear translation cache" },
   "cacheCleared": { "message": "Cache cleared" },
   "field_apiKey": { "message": "API key" },

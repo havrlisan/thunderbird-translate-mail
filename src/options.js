@@ -13,7 +13,7 @@ for (const code of LANGUAGES) $('target').add(new Option(names.of(code), code));
 let creds = {};
 
 function save() {
-  return messenger.storage.local.set({ provider: $('provider').value, target: $('target').value, creds });
+  return messenger.storage.local.set({ provider: $('provider').value, target: $('target').value, translateQuoted: $('quoted').checked, creds });
 }
 
 // One input per credential field of the selected Provider; other Providers' credentials are kept.
@@ -37,13 +37,15 @@ function renderFields() {
 
 $('provider').addEventListener('change', () => { renderFields(); save(); });
 $('target').addEventListener('change', save);
+$('quoted').addEventListener('change', save);
 $('clearCache').addEventListener('click', async () => {
   await messenger.storage.local.remove('cache');
   $('status').textContent = t('cacheCleared');
 });
 
-const s = await messenger.storage.local.get({ provider: 'deepl', target: 'en', creds: {} });
+const s = await messenger.storage.local.get({ provider: 'deepl', target: 'en', translateQuoted: false, creds: {} });
 creds = s.creds;
 $('provider').value = PROVIDERS[s.provider] ? s.provider : 'deepl';
 $('target').value = s.target;
+$('quoted').checked = s.translateQuoted;
 renderFields();

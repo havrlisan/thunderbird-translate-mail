@@ -56,9 +56,9 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
   inFlight.add(tabId);
   let provider;
   try {
-    let target, creds, cache;
-    ({ provider, target = 'en', creds = {}, cache = {} } =
-      await messenger.storage.local.get(['provider', 'target', 'creds', 'cache']));
+    let target, creds, cache, translateQuoted;
+    ({ provider, target = 'en', creds = {}, cache = {}, translateQuoted = false } =
+      await messenger.storage.local.get(['provider', 'target', 'creds', 'cache', 'translateQuoted']));
     const p = PROVIDERS[provider];
     const c = creds[provider] ?? {};
     if (!p || p.fields.some((f) => !c[f])) {
@@ -67,7 +67,7 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
     }
 
     await messenger.scripting.executeScript({ target: { tabId }, files: ['src/text.js', 'src/content.js'] });
-    const state = await messenger.tabs.sendMessage(tabId, { cmd: 'toggle' });
+    const state = await messenger.tabs.sendMessage(tabId, { cmd: 'toggle', skipQuoted: !translateQuoted });
     if (!state.texts) {
       // Toggled an existing Translation on or off.
       if (state.shown) await showOriginalButton(tabId, detectedByTab.get(tabId) ?? '');

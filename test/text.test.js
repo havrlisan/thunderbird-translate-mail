@@ -27,3 +27,10 @@ test('SKIP_TAGS covers non-visible text containers', () => {
   for (const tag of ['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA']) assert.ok(SKIP_TAGS.has(tag), tag);
   assert.ok(!SKIP_TAGS.has('P'));
 });
+
+test('SKIP_SELECTOR names quoted text, cite prefixes, signatures and forwarded headers', () => {
+  const { SKIP_SELECTOR } = globalThis.TM_TEXT;
+  for (const s of ['blockquote[type=cite]', '.gmail_quote', '.moz-cite-prefix', '.moz-signature', '.moz-txt-sig', '.moz-email-headers-table'])
+    assert.ok(SKIP_SELECTOR.split(/,\s*/).includes(s), s);
+  assert.ok(!SKIP_SELECTOR.includes('moz-forward-container')); // the forwarded body itself must be translated
+});

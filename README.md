@@ -11,6 +11,8 @@ Thunderbird add-on (128+) that adds a **Translate** button to the message header
 
 Message text is sent to the selected Provider **only when you click Translate**. Translations are cached locally (200 most recent) so reopening a message is free.
 
+Quoted replies, signatures and forwarded-message headers are skipped by default — they have already been read and would eat into free-tier quota. Turn on **Also translate quoted text and signatures** in the add-on settings to include them.
+
 Not every Provider supports every target language; unsupported combinations show the Provider's error in a popup window.
 
 ## Install
