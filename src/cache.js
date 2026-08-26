@@ -13,3 +13,11 @@ export function cachePut(cache, key, value, now, max = CACHE_MAX) {
   }
   return next;
 }
+
+// Source Language the reading side detected for this message, from any cached Translation of it (any Provider/target).
+export function cachedDetected(cache, headerMessageId) {
+  if (!headerMessageId) return undefined;
+  const prefix = `${headerMessageId}|`;
+  for (const [k, v] of Object.entries(cache)) if (k.startsWith(prefix) && v.detected) return v.detected;
+  return undefined;
+}
