@@ -20,7 +20,7 @@ function render(r) {
     r.busy ? t('translating')
     : r.error ? t(r.error, [PROVIDERS[r.provider]?.name ?? '', String(r.status ?? '')])
     : r.alreadyIn ? t('alreadyIn', name(r.alreadyIn))
-    : r.shown ? t('translatedNote', [name(r.from), name(r.to)])
+    : r.from ? t('translatedNote', [name(r.from), name(r.to)])
     : '';
 }
 
