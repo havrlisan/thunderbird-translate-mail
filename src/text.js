@@ -7,6 +7,13 @@ globalThis.TM_TEXT = {
     const m = /^(\s*)([\s\S]*?)(\s*)$/.exec(s);
     return [m[1], m[2], m[3]];
   },
+  // Non-flowed plain-text mail arrives as one text node with hard-wrapped lines; Providers treat each
+  // newline as a sentence boundary. Join a line to the next when it is long enough to have been wrapped
+  // (>= 40 chars) and the next line is not blank, indented, or a bullet / numbered / quote line.
+  // ponytail: fixed length heuristic; short wrapped lines (long word pushed down) stay fragments as before.
+  unwrap(s) {
+    return s.replace(/(?<=[^\n]{40,})[ \t]*\n(?!\n|[ \t]|[-*•>]|\d+[.)])/g, ' ');
+  },
   // Only strings containing a letter are worth a Provider call.
   shouldTranslate(s) {
     return /\p{L}/u.test(s);

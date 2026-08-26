@@ -6,8 +6,6 @@ Already settled elsewhere and deliberately not listed: auto-translate on open, p
 
 ## Translation quality
 
-2. **Join hard-wrapped plain-text lines.** Plain-text mail renders as one `<pre>` / `.moz-text-flowed` block where every wrapped line is its own text node split by `<br>`, so each line is translated as a sentence fragment. Join sibling text nodes separated only by `<br>` within the same parent, translate once, write the result into the first node and blank the others. Verify TB's actual rendering on a real plain-text message first.
-   - Known limitation that stays: inline formatting in HTML mail (`Please <b>do not</b> reply`) splits sentences too; fixing that needs HTML mode. Document it in the README if it shows up in practice.
 3. **Per-item language detection.** Bilingual mail (e.g. English body, Croatian quoted reply) currently reports one Source Language from the longest item. Pass per-item `detected` through and report "already in target" only when all items are.
 
 ## UX
@@ -33,4 +31,4 @@ Already settled elsewhere and deliberately not listed: auto-translate on open, p
 
 ## Suggested next release
 
-2 + 4 + 5: all small, improve either quality or first-run experience, none touch the settled decisions. Plan 10 as the v2 headline.
+4 + 5: all small, improve either quality or first-run experience, none touch the settled decisions. Plan 10 as the v2 headline.

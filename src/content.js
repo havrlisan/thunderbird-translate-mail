@@ -3,7 +3,7 @@
 if (!globalThis.__translateMail) {
   globalThis.__translateMail = true;
   const api = globalThis.messenger ?? globalThis.browser; // content scripts: be safe about which global exists
-  const { splitWhitespace, shouldTranslate, SKIP_TAGS, SKIP_SELECTOR } = globalThis.TM_TEXT;
+  const { splitWhitespace, shouldTranslate, unwrap, SKIP_TAGS, SKIP_SELECTOR } = globalThis.TM_TEXT;
 
   let nodes = [];          // text nodes in document order
   let originals = [];      // their Original nodeValue
@@ -25,7 +25,7 @@ if (!globalThis.__translateMail) {
       nodes.push(n);
       originals.push(n.nodeValue);
     }
-    return originals.map((s) => splitWhitespace(s)[1]);
+    return originals.map((s) => unwrap(splitWhitespace(s)[1]));
   }
 
   function line(text, style) {

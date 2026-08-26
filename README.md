@@ -13,6 +13,8 @@ Message text is sent to the selected Provider **only when you click Translate**.
 
 Quoted replies, signatures and forwarded-message headers are skipped by default — they have already been read and would eat into free-tier quota. Turn on **Also translate quoted text and signatures** in the add-on settings to include them.
 
+Hard-wrapped lines in plain-text messages are joined before translation so sentences are not translated as fragments; lines shorter than 40 characters, indented lines and list items are left alone, so a long address or table line can occasionally be merged with the next one in the translated view (the original is never modified).
+
 Not every Provider supports every target language; unsupported combinations show the Provider's error in a popup window.
 
 ## Install
