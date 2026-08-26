@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
   <style>svg { --c: #18181b; } @media (prefers-color-scheme: dark) { svg { --c: #f4f4f5; } }</style>
-  <path fill-rule="evenodd" d="M7.5 5.5h3l4 10h-2.5l-.9-2.5H6.9L6 15.5H3.5zm1.1 2.2-1 3h2.8z" style="fill:var(--c);stroke:var(--c)" fill-opacity=".2" stroke-linejoin="round"/>
+  <path fill-rule="evenodd" d="m 7.5,5.5 h 3 l 4,10 H 12 L 11.1,13 H 6.9 L 6,15.5 H 3.5 Z M 8.9689539,7.7 7.6,10.7 h 2.8 z" style="fill:var(--c);stroke:var(--c)" fill-opacity="0.2" stroke-linejoin="round"/>
   <path d="M1 1.5h6V3H5.6c-.3 1.4-.9 2.6-1.7 3.6.5.4 1.1.7 1.7 1L5.1 9c-.8-.3-1.5-.7-2.1-1.3C2.4 8.3 1.7 8.7.9 9L.4 7.6c.6-.3 1.2-.6 1.7-1C1.5 5.9 1.1 5.2.9 4.4h1.5c.2.5.4.9.7 1.3.5-.7.9-1.6 1.1-2.7H1z" style="fill:var(--c)"/>
 </svg>
