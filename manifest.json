@@ -26,7 +26,7 @@
   },
   "commands": {
     "_execute_message_display_action": {
-      "suggested_key": { "default": "Alt+Shift+T" },
+      "suggested_key": { "default": "Ctrl+Shift+X" },
       "description": "__MSG_translate__"
     }
   },

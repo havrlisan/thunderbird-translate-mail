@@ -17,6 +17,11 @@ const detectedByTab = new Map();
 // Tabs with a click already being handled; a second click would race the first.
 const inFlight = new Set();
 
+// Bumped whenever a tab shows a different message (or goes away): a click still in flight for the
+// previous message must not touch the button or the new document.
+const generation = new Map();
+const bump = (tabId) => generation.set(tabId, (generation.get(tabId) ?? 0) + 1);
+
 // label = button text, title = tooltip.
 async function setButton(tabId, label, title = label) {
   await messenger.messageDisplayAction.setLabel({ tabId, label });
@@ -29,9 +34,12 @@ function showOriginalButton(tabId, from) {
 
 // A newly displayed message is a fresh document: the content script state is gone, reset the button too.
 messenger.messageDisplay.onMessagesDisplayed.addListener((tab) => {
+  bump(tab.id);
   detectedByTab.delete(tab.id);
   setButton(tab.id, t('translate')).catch(console.error);
 });
+
+messenger.tabs.onRemoved.addListener(bump);
 
 // Explain a failed translation in a small popup window; the button itself stays "Translate".
 async function showError(e, provider) {
@@ -47,6 +55,8 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
   const tabId = tab.id;
   if (inFlight.has(tabId)) return;
   inFlight.add(tabId);
+  const gen = generation.get(tabId);
+  const stale = () => generation.get(tabId) !== gen;
   let provider;
   try {
     let target, creds, cache, translateQuoted;
@@ -59,8 +69,10 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
       return;
     }
 
+    // The content script reuses its last Translation only if it was made with the same settings.
+    const settingsKey = `${provider}|${target}|${translateQuoted}`;
     await messenger.scripting.executeScript({ target: { tabId }, files: ['src/text.js', 'src/content.js'] });
-    const state = await messenger.tabs.sendMessage(tabId, { cmd: 'toggle', skipQuoted: !translateQuoted });
+    const state = await messenger.tabs.sendMessage(tabId, { cmd: 'toggle', skipQuoted: !translateQuoted, settingsKey });
     if (!state.texts) {
       // Toggled an existing Translation on or off.
       if (state.shown) await showOriginalButton(tabId, detectedByTab.get(tabId) ?? '');
@@ -88,6 +100,7 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
       // ponytail: read-modify-write of the whole cache; concurrent clicks in two tabs can drop one entry. Fine for a cache.
       await messenger.storage.local.set({ cache: cachePut(cache, key, hit, Date.now()) });
     }
+    if (stale()) return; // user moved on meanwhile; the Translation is cached for when they come back
 
     detectedByTab.set(tabId, hit.detected);
     if (hit.detected === target) {
@@ -95,10 +108,11 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
       return;
     }
     const note = t('translatedNote', [languageName(hit.detected), languageName(target)]);
-    await messenger.tabs.sendMessage(tabId, { cmd: 'apply', subject: hit.subject, texts: hit.texts, note });
+    await messenger.tabs.sendMessage(tabId, { cmd: 'apply', subject: hit.subject, texts: hit.texts, note, settingsKey });
     await showOriginalButton(tabId, hit.detected);
   } catch (e) {
     console.error(e);
+    if (stale()) return;
     await setButton(tabId, t('translate'));
     await showError(e, provider);
   } finally {

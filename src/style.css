@@ -35,6 +35,8 @@ input, select, button {
   box-sizing: border-box;
 }
 input, select { width: 100%; }
+input[type=checkbox] { width: auto; margin: 0; }
+label.row > span { margin: 0; font-size: inherit; color: inherit; }
 input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
 button { padding: 6px 12px; cursor: pointer; }
 button:hover { border-color: var(--accent); }

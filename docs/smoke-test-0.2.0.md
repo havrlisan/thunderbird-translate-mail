@@ -36,3 +36,11 @@ Use a thread with at least one reply, ideally one you sent from Thunderbird (so 
 16. Dark theme: Options page and the error popup still readable.
 
 Anything wrong: note the step number and what the header/button showed.
+
+## F. Fixes after the first round (0.2.0 build 2)
+
+17. Options: the checkbox sits left of its label on one line, same text colour as the buttons.
+18. Translate a message, click Show original, change **Translate into** in Preferences, click Translate on the same message → `Translating…`, new language. Same after ticking **Also translate quoted text and signatures**.
+19. Shortcut is now **Ctrl+Shift+X**.
+20. Click Translate and immediately select another message: the new message's button stays `Translate`, no error popup. Go back to the first message and click Translate → instant (came from cache).
+21. Click Translate on a message opened in its own tab and close the tab before it finishes → no error popup.

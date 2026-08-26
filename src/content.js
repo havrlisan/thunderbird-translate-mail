@@ -8,6 +8,7 @@ if (!globalThis.__translateMail) {
   let nodes = [];          // text nodes in document order
   let originals = [];      // their Original nodeValue
   let translation = null;  // last applied { subject, texts, note }
+  let settingsKey = null;  // provider|target|quoted the translation was made with
   let shown = false;
   let headerEl = null;     // prepended block: translated subject + "Translated: X → Y" note
 
@@ -56,11 +57,12 @@ if (!globalThis.__translateMail) {
     switch (msg.cmd) {
       case 'apply':
         translation = { subject: msg.subject, texts: msg.texts, note: msg.note };
+        settingsKey = msg.settingsKey;
         apply(translation);
         return Promise.resolve({ shown: true });
       case 'toggle':
         if (shown) { restore(); return Promise.resolve({ shown: false }); }
-        if (translation) { apply(translation); return Promise.resolve({ shown: true }); }
+        if (translation && settingsKey === msg.settingsKey) { apply(translation); return Promise.resolve({ shown: true }); }
         return Promise.resolve({ shown: false, texts: collect(msg.skipQuoted) });
       default:
         return undefined;

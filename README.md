@@ -9,7 +9,7 @@ Thunderbird add-on (128+) that adds a **Translate** button to the message header
 | Google Cloud Translation | Google Cloud console → enable Cloud Translation API → API key | billed (500 000 chars/month free with billing enabled) |
 | Yandex Translate | Yandex Cloud console → service account API key + folder ID | trial grant only |
 
-The button is also bound to **Alt+Shift+T** (change it under Add-ons and Themes → gear → Manage Extension Shortcuts).
+The button is also bound to **Ctrl+Shift+X** (change it under Add-ons and Themes → gear → Manage Extension Shortcuts).
 
 Message text is sent to the selected Provider **only when you click Translate**. Translations are cached locally (200 most recent) so reopening a message is free.
 
