@@ -1,5 +1,5 @@
 import { PROVIDERS, translateAll, errorKey } from './providers.js';
-import { cacheKey, cachePut } from './cache.js';
+import { cacheKey, cachePut, cachedDetected } from './cache.js';
 
 const t = (key, subs) => messenger.i18n.getMessage(key, subs);
 
@@ -32,6 +32,19 @@ function showOriginalButton(tabId, from) {
   return setButton(tabId, t('showOriginal'), t('translatedFrom', languageName(from)));
 }
 
+// Everything both click paths need. `creds` is narrowed to the selected Provider; `configured` is false when
+// no Provider is chosen or a credential field is empty.
+async function loadSettings() {
+  const { provider, target = 'en', creds = {}, cache = {}, translateQuoted = false, replyLang } =
+    await messenger.storage.local.get(['provider', 'target', 'creds', 'cache', 'translateQuoted', 'replyLang']);
+  const c = creds[provider] ?? {};
+  const p = PROVIDERS[provider];
+  return { provider, target, creds: c, cache, translateQuoted, replyLang, configured: !!p && p.fields.every((f) => c[f]) };
+}
+
+// Idempotent: content.js guards against running twice in the same document.
+const inject = (tabId) => messenger.scripting.executeScript({ target: { tabId }, files: ['src/text.js', 'src/content.js'] });
+
 // A newly displayed message is a fresh document: the content script state is gone, reset the button too.
 messenger.messageDisplay.onMessagesDisplayed.addListener((tab) => {
   bump(tab.id);
@@ -59,19 +72,16 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
   const stale = () => generation.get(tabId) !== gen;
   let provider;
   try {
-    let target, creds, cache, translateQuoted;
-    ({ provider, target = 'en', creds = {}, cache = {}, translateQuoted = false } =
-      await messenger.storage.local.get(['provider', 'target', 'creds', 'cache', 'translateQuoted']));
-    const p = PROVIDERS[provider];
-    const c = creds[provider] ?? {};
-    if (!p || p.fields.some((f) => !c[f])) {
+    let target, c, cache, translateQuoted, configured;
+    ({ provider, target, creds: c, cache, translateQuoted, configured } = await loadSettings());
+    if (!configured) {
       await messenger.runtime.openOptionsPage();
       return;
     }
 
     // The content script reuses its last Translation only if it was made with the same settings.
     const settingsKey = `${provider}|${target}|${translateQuoted}`;
-    await messenger.scripting.executeScript({ target: { tabId }, files: ['src/text.js', 'src/content.js'] });
+    await inject(tabId);
     const state = await messenger.tabs.sendMessage(tabId, { cmd: 'toggle', skipQuoted: !translateQuoted, settingsKey });
     if (!state.texts) {
       // Toggled an existing Translation on or off.
@@ -118,6 +128,67 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
   } finally {
     inFlight.delete(tabId);
   }
+});
+
+// --- Compose side: the popup (src/compose.js) drives these over runtime.sendMessage. ---
+
+// Language to suggest for a reply: what the reading side detected on the message being answered,
+// else the last language used here, else the Target Language.
+async function suggestedLanguage(tabId, { cache, replyLang, target }) {
+  try {
+    const { relatedMessageId } = await messenger.compose.getComposeDetails(tabId);
+    if (relatedMessageId) {
+      const { headerMessageId } = await messenger.messages.get(relatedMessageId);
+      const detected = cachedDetected(cache, headerMessageId);
+      if (detected) return detected;
+    }
+  } catch (e) {
+    console.error(e); // no related message (new mail, reopened draft) or it is gone; fall through
+  }
+  return replyLang ?? target;
+}
+
+async function composeState(tabId) {
+  await inject(tabId);
+  const { shown } = await messenger.tabs.sendMessage(tabId, { cmd: 'state' });
+  return { shown, suggested: await suggestedLanguage(tabId, await loadSettings()), busy: inFlight.has(tabId) };
+}
+
+// Translate the draft (quoted text and signature excluded) into `lang`, or restore the Original if a Translation
+// is shown. No cache: drafts change. Errors are returned, not thrown — the popup renders them.
+async function composeTranslate(tabId, lang) {
+  if (inFlight.has(tabId)) return { busy: true };
+  inFlight.add(tabId);
+  let provider;
+  try {
+    const s = await loadSettings();
+    provider = s.provider;
+    if (!s.configured) {
+      await messenger.runtime.openOptionsPage();
+      return { error: 'setupFirst' };
+    }
+    await inject(tabId);
+    const settingsKey = `${provider}|${lang}`;
+    const state = await messenger.tabs.sendMessage(tabId, { cmd: 'toggle', skipQuoted: true, reuse: false, settingsKey });
+    if (!state.texts) return { shown: false }; // restored the Original
+    if (state.texts.length === 0) return { error: 'nothingToTranslate' };
+    const r = await translateAll(provider, state.texts, lang, s.creds);
+    if (r.detected === lang) return { alreadyIn: lang };
+    await messenger.tabs.sendMessage(tabId, { cmd: 'apply', subject: '', texts: r.texts, note: '', settingsKey });
+    await messenger.storage.local.set({ replyLang: lang });
+    return { shown: true, from: r.detected, to: lang };
+  } catch (e) {
+    console.error(e);
+    return { error: errorKey(e, provider), details: e.message, provider, status: e.status };
+  } finally {
+    inFlight.delete(tabId);
+  }
+}
+
+messenger.runtime.onMessage.addListener((msg) => {
+  if (msg.cmd === 'composeState') return composeState(msg.tabId);
+  if (msg.cmd === 'composeTranslate') return composeTranslate(msg.tabId, msg.lang);
+  return undefined;
 });
 
 // SPIKE (removed in Task 5): does executeScript reach the compose editor, and do the reading-side selectors apply there?

@@ -7,6 +7,7 @@
   "translating": { "message": "Translating…" },
   "alreadyIn": { "message": "Already in $LANG$", "placeholders": { "LANG": { "content": "$1" } } },
   "nothingToTranslate": { "message": "Nothing to translate" },
+  "setupFirst": { "message": "Set up a Provider in the add-on settings first" },
   "error": { "message": "Translation failed" },
   "errorAuth": { "message": "$PROVIDER$ rejected the request (HTTP $STATUS$). The API key is probably invalid or expired. Check the add-on settings.", "placeholders": { "PROVIDER": { "content": "$1" }, "STATUS": { "content": "$2" } } },
   "errorAuthMicrosoft": { "message": "$PROVIDER$ rejected the request (HTTP $STATUS$). The API key or the Azure region is probably wrong. Check the add-on settings.", "placeholders": { "PROVIDER": { "content": "$1" }, "STATUS": { "content": "$2" } } },
