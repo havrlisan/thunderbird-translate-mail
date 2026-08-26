@@ -190,16 +190,3 @@ messenger.runtime.onMessage.addListener((msg) => {
   if (msg.cmd === 'composeTranslate') return composeTranslate(msg.tabId, msg.lang);
   return undefined;
 });
-
-// SPIKE (removed in Task 5): does executeScript reach the compose editor, and do the reading-side selectors apply there?
-messenger.composeAction.onClicked.addListener(async (tab) => {
-  const [r] = await messenger.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: () => ({
-      chars: document.body.innerText.length,
-      quoted: document.querySelectorAll('blockquote[type=cite], .moz-cite-prefix').length,
-      signature: document.querySelectorAll('.moz-signature').length,
-    }),
-  });
-  console.log('compose spike', JSON.stringify(r.result));
-});

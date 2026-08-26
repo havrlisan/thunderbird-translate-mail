@@ -22,6 +22,7 @@
   "optProvider": { "message": "Provider" },
   "optTarget": { "message": "Translate into" },
   "optQuoted": { "message": "Also translate quoted text and signatures" },
+  "composeInto": { "message": "Translate into" },
   "test": { "message": "Test" },
   "testing": { "message": "Testing…" },
   "testOk": { "message": "✓ Works (Hello → $RESULT$)", "placeholders": { "RESULT": { "content": "$1" } } },

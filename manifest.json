@@ -26,7 +26,8 @@
   },
   "compose_action": {
     "default_title": "__MSG_translateReply__",
-    "default_icon": "icons/translate.svg"
+    "default_icon": "icons/translate.svg",
+    "default_popup": "src/compose.html"
   },
   "commands": {
     "_execute_message_display_action": {
