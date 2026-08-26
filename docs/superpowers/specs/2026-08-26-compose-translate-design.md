@@ -13,7 +13,9 @@ Roadmap item 10. Glossary: see `CONTEXT.md`. Builds on the v1 design (`2026-08-2
   - `{ shown: true, from, to }` → status "Translated: <from> → <to>" (existing `translatedNote`), button "Show original".
   - `{ shown: false }` → status empty, button "Translate".
   - `{ alreadyIn }` → status "Already in <language>".
-  - `{ error: 'nothingToTranslate' | 'setupFirst' | <errorKey>, details, provider }` → status shows the i18n text, tooltip shows `details`. `setupFirst` additionally means the background opened the Options page.
+  - `{ error: 'nothingToTranslate' | 'setupFirst' | <errorKey>, details, provider, status }` → status shows the i18n text (Provider name and HTTP status substituted as on the reading side), tooltip shows `details`. `setupFirst` additionally means the background opened the Options page.
+  - `{ busy: true }` → status "Translating…", button disabled.
+  - A `suggested` code outside `LANGUAGES` (a detected language the list lacks) is added to the select on the fly.
 - Button disabled and status "Translating…" while waiting. All work runs in the background, so the popup closing mid-flight cancels nothing; reopening it shows the true state.
 
 ## Suggested language
@@ -26,9 +28,10 @@ Roadmap item 10. Glossary: see `CONTEXT.md`. Builds on the v1 design (`2026-08-2
      - `{ shown: false }` without `texts` → the draft was restored; reply `{ shown: false }`.
      - `texts` empty → reply `{ error: 'nothingToTranslate' }`.
   3. `translateAll(provider, texts, lang, creds)`. `detected === lang` → reply `{ alreadyIn: lang }`, draft untouched.
-  4. `tabs.sendMessage(tabId, { cmd: 'apply', subject: '', texts, note: '', settingsKey })`; `detectedByTab.set(tabId, detected)`; save `replyLang`; reply `{ shown: true, from: detected, to: lang }`.
-  5. Any throw → `console.error`, reply `{ error: errorKey(e, provider), details: e.message, provider }`.
-- `composeState` handler: inject the same scripts (idempotent), `tabs.sendMessage(tabId, { cmd: 'state' })` → `shown`; compute `suggested` as above.
+  4. `tabs.sendMessage(tabId, { cmd: 'apply', subject: '', texts, note: '', settingsKey })`; save `replyLang`; reply `{ shown: true, from: detected, to: lang }`.
+  5. Any throw → `console.error`, reply `{ error: errorKey(e, provider), details: e.message, provider, status }`.
+  - Tab already in flight (popup closed and reopened mid-translation, then clicked again) → reply `{ busy: true }` without touching anything.
+- `composeState` handler: inject the same scripts (idempotent), `tabs.sendMessage(tabId, { cmd: 'state' })` → `shown`; compute `suggested` as above; `busy: inFlight.has(tabId)` so a reopened popup shows "Translating…" with the button disabled (it does not refresh by itself; reopen it later).
 - Quoted text and signatures (`SKIP_SELECTOR`) are always skipped in compose — they are not the user's reply. The `translateQuoted` option applies to reading only.
 - The subject is never touched.
 - No cache on the compose side: drafts change.
