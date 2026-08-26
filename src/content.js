@@ -1,4 +1,4 @@
-// Injected into the displayed message (after src/text.js) by background.js on every click.
+// Injected into the displayed message or the compose editor (after src/text.js) by background.js.
 // Guarded so repeated injection into the same document is a no-op.
 if (!globalThis.__translateMail) {
   globalThis.__translateMail = true;
@@ -38,12 +38,12 @@ if (!globalThis.__translateMail) {
       const [lead, , trail] = splitWhitespace(originals[i]);
       n.nodeValue = lead + (texts[i] ?? splitWhitespace(originals[i])[1]) + trail;
     });
-    if (!headerEl) {
+    if (!headerEl && (subject || note)) {
       headerEl = line('', 'margin:0 0 1em;padding:0 0 .5em;border-bottom:1px solid currentColor');
       if (subject) headerEl.append(line(api.i18n.getMessage('subjectLine', subject), 'font-weight:bold'));
       if (note) headerEl.append(line(note, 'opacity:.7;font-size:.9em'));
     }
-    document.body.prepend(headerEl);
+    if (headerEl) document.body.prepend(headerEl);
     shown = true;
   }
 
@@ -62,8 +62,11 @@ if (!globalThis.__translateMail) {
         return Promise.resolve({ shown: true });
       case 'toggle':
         if (shown) { restore(); return Promise.resolve({ shown: false }); }
-        if (translation && settingsKey === msg.settingsKey) { apply(translation); return Promise.resolve({ shown: true }); }
+        // A compose draft may have changed since; the compose side passes reuse:false and always re-collects.
+        if (msg.reuse !== false && translation && settingsKey === msg.settingsKey) { apply(translation); return Promise.resolve({ shown: true }); }
         return Promise.resolve({ shown: false, texts: collect(msg.skipQuoted) });
+      case 'state':
+        return Promise.resolve({ shown });
       default:
         return undefined;
     }
