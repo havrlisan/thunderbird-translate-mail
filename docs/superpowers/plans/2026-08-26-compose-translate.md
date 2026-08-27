@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A `compose_action` button whose popup translates the draft you are writing (not the quoted text or signature) into a picked language — preselected to the Source Language of the message you are answering — in place, with "Show original" to flip back.
+**Goal:** A `compose_action` button whose popup translates the draft you are writing (not the quoted text or signature) into a picked language — preselected to the Source Language of the message you are answering — in place, written through the editor so Ctrl+Z undoes it; with a selection, only the selection.
 
-**Architecture:** The popup (`src/compose.html` + `src/compose.js`) is a thin view: it asks the background for state, sends one `composeTranslate` message, renders the reply. The background reuses the reading side wholesale: `loadSettings()`, `translateAll`, and the same `src/text.js` + `src/content.js` injected into the compose editor via `scripting.executeScript`. `content.js` gets three tiny changes (no header block when there is nothing to show, a `reuse: false` flag, a `state` command). The suggested language comes from the existing translation cache via a new pure helper `cachedDetected`.
+**Architecture:** The popup (`src/compose.html` + `src/compose.js`) is a thin view: it asks the background for state, sends one `composeTranslate` message, renders the reply. The background reuses the reading side wholesale: `loadSettings()`, `translateAll`, and the same `src/text.js` + `src/content.js` injected into the compose editor via `scripting.executeScript`. `content.js` keeps its reading-side logic and adds two compose commands: `composeCollect` (selection or runs of reply text) and `composeInsert` (`execCommand('insertHTML')` per run, so the editor's undo covers it). Tasks 3/5b's toggle changes were superseded by Task 5c. The suggested language comes from the existing translation cache via a new pure helper `cachedDetected`.
 
 **Tech Stack:** Thunderbird MailExtension API (MV3, `messenger.*`), plain ES2022 JavaScript, Node `node --test`, no dependencies.
 
@@ -30,9 +30,9 @@
 | File | Change | Responsibility |
 |---|---|---|
 | `manifest.json` | modify | `compose` permission, `compose_action` with popup |
-| `_locales/en/messages.json` | modify | `translateReply`, `composeInto`, `setupFirst`; description update |
+| `_locales/en/messages.json` | modify | `translateReply`, `translateSelection`, `composeInto`, `setupFirst`; description update |
 | `src/cache.js`, `test/cache.test.js` | modify | `cachedDetected(cache, headerMessageId)` |
-| `src/content.js` | modify | header block only when needed; `reuse` flag; `state` command |
+| `src/content.js` | modify | compose commands `composeCollect` / `composeInsert` (undo-safe writes) |
 | `src/background.js` | modify | `loadSettings()`, `inject()`, `composeState`, `composeTranslate`, `runtime.onMessage` router |
 | `src/compose.html`, `src/compose.js` | create | popup view |
 | `README.md`, `ROADMAP.md`, `docs/smoke-test-0.3.0.md` | modify/create | docs, roadmap item 10 removed, smoke checklist |
@@ -680,6 +680,291 @@ Reload the temporary add-on. In a compose window:
 
 ---
 
+### Task 5c: Undo-based compose writes, selection support (redesign after the Task 5b smoke test)
+
+Luka preferred the editor's own undo over a toggle; a spike confirmed `execCommand('insertHTML')` is reverted by one Ctrl+Z in both compose editors. The spec was rewritten accordingly (sections "Product", "Popup", "Translating the draft", "`content.js`"). This task replaces the compose-side parts of Tasks 3, 4, 5 and 5b; the reading side goes back to its 0.2.0 logic.
+
+**Files:**
+- Modify: `src/text.js` (`SKIP_SELECTOR`), `test/text.test.js`
+- Rewrite: `src/content.js` (full file below)
+- Modify: `src/background.js` (`composeState`, `composeTranslate`)
+- Modify: `src/compose.js` (`render`, button label), `_locales/en/messages.json` (`translateSelection`)
+
+**Interfaces:**
+- Content protocol: `{ cmd: 'composeCollect' }` → `{ selection: boolean, texts: string[] }`; `{ cmd: 'composeInsert', texts }` → `{ inserted: boolean }`. Reading side unchanged: `toggle` → `{ shown }` | `{ shown: false, texts }`, `apply` → `{ shown: true }`.
+- Background protocol: `composeState` → `{ suggested, busy, selection }`; `composeTranslate` → `{ from, to }` | `{ alreadyIn }` | `{ busy: true }` | `{ error, details?, provider?, status? }`.
+
+- [ ] **Step 1: Failing test for the selector**
+
+Append to `test/text.test.js` (the destructuring line at the top must also pull `SKIP_SELECTOR`: `const { splitWhitespace, shouldTranslate, SKIP_TAGS, SKIP_SELECTOR } = globalThis.TM_TEXT;` — extend it if `SKIP_SELECTOR` is not already there):
+
+```js
+test('SKIP_SELECTOR covers the plain-text compose quotation span', () => {
+  assert.ok(SKIP_SELECTOR.includes('span[_moz_quote]'));
+});
+```
+
+Run: `npm test` → this test FAILS; everything else passes.
+
+- [ ] **Step 2: `text.js` selector**
+
+In `src/text.js`, change the `SKIP_SELECTOR` line to:
+
+```js
+  // Quoted replies, "On … wrote:" lines, signatures and inline-forward headers (Thunderbird HTML + plain-text
+  // rendering, Gmail, Apple Mail, plain-text compose). Skipped unless the user opts to translate quoted text too.
+  SKIP_SELECTOR: 'blockquote[type=cite], span[_moz_quote], .gmail_quote, .moz-cite-prefix, .moz-signature, .moz-txt-sig, .moz-email-headers-table',
+```
+
+(Replace the two existing comment lines above `SKIP_SELECTOR` with the two above.) Run `npm test` → all pass (27/27).
+
+- [ ] **Step 3: Rewrite `src/content.js`**
+
+Replace the whole file with:
+
+```js
+// Injected into the displayed message or the compose editor (after src/text.js) by background.js.
+// Guarded so repeated injection into the same document is a no-op.
+if (!globalThis.__translateMail) {
+  globalThis.__translateMail = true;
+  const api = globalThis.messenger ?? globalThis.browser; // content scripts: be safe about which global exists
+  const { splitWhitespace, shouldTranslate, unwrap, SKIP_TAGS, SKIP_SELECTOR } = globalThis.TM_TEXT;
+
+  // The part of text node `n` inside `range` (all of it without a range).
+  function part(n, range) {
+    if (!range) return n.nodeValue;
+    const start = n === range.startContainer ? range.startOffset : 0;
+    const end = n === range.endContainer ? range.endOffset : n.nodeValue.length;
+    return n.nodeValue.slice(start, end);
+  }
+
+  // Text nodes worth translating, in document order — within `range` when given.
+  function walk(skipQuoted, range) {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) =>
+        !SKIP_TAGS.has(n.parentNode?.nodeName) && (!range || range.intersectsNode(n)) && shouldTranslate(part(n, range)) &&
+        !(skipQuoted && n.parentElement?.closest(SKIP_SELECTOR))
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT,
+    });
+    const out = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) out.push(n);
+    return out;
+  }
+
+  // --- Message display: rewrite text nodes in place; toggling restores the Original. ---
+
+  let nodes = [];          // text nodes in document order
+  let originals = [];      // their Original nodeValue
+  let translation = null;  // last applied { subject, texts, note }
+  let settingsKey = null;  // provider|target|quoted the translation was made with
+  let shown = false;
+  let headerEl = null;     // prepended block: translated subject + "Translated: X → Y" note
+
+  function collect(skipQuoted) {
+    nodes = walk(skipQuoted);
+    originals = nodes.map((n) => n.nodeValue);
+    return originals.map((s) => unwrap(splitWhitespace(s)[1]));
+  }
+
+  function line(text, style) {
+    return Object.assign(document.createElement('div'), { textContent: text, style });
+  }
+
+  function apply({ subject, texts, note }) {
+    nodes.forEach((n, i) => {
+      const [lead, , trail] = splitWhitespace(originals[i]);
+      n.nodeValue = lead + (texts[i] ?? splitWhitespace(originals[i])[1]) + trail;
+    });
+    if (!headerEl) {
+      headerEl = line('', 'margin:0 0 1em;padding:0 0 .5em;border-bottom:1px solid currentColor');
+      if (subject) headerEl.append(line(api.i18n.getMessage('subjectLine', subject), 'font-weight:bold'));
+      if (note) headerEl.append(line(note, 'opacity:.7;font-size:.9em'));
+    }
+    document.body.prepend(headerEl);
+    shown = true;
+  }
+
+  function restore() {
+    nodes.forEach((n, i) => { n.nodeValue = originals[i]; });
+    headerEl?.remove();
+    shown = false;
+  }
+
+  // --- Compose editor: write through execCommand, so one Ctrl+Z reverts a run and Ctrl+Y re-applies it. ---
+
+  let ranges = [];  // one Range per run (or the selection)
+  let parts = [];   // per Range: [{ node, text }] — the translatable text nodes and the part of each inside the Range
+
+  // Every text node inside `root` (a fragment), or the body's text nodes intersecting `range`, in document order.
+  function textNodes(root, range) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, range
+      ? { acceptNode: (n) => (range.intersectsNode(n) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) }
+      : null);
+    const out = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) out.push(n);
+    return out;
+  }
+
+  // The selection when there is one (quoted text counts then: it was picked on purpose); otherwise one Range per
+  // run of body children holding reply text — a child with text but nothing to translate (quote block, signature)
+  // ends a run, children without text (<br>) are neutral.
+  function composeRanges() {
+    const sel = window.getSelection();
+    if (sel.rangeCount && !sel.isCollapsed) return { selection: true, ranges: [sel.getRangeAt(0)] };
+    const root = document.body;
+    const childOf = (n) => { while (n.parentNode !== root) n = n.parentNode; return n; };
+    const withText = new Set(walk(true).map(childOf));
+    const out = [];
+    let run = null;
+    for (const child of root.childNodes) {
+      if (withText.has(child)) {
+        if (!run) { run = document.createRange(); run.setStartBefore(child); out.push(run); }
+        run.setEndAfter(child);
+      } else if (child.textContent.trim()) {
+        run = null;
+      }
+    }
+    return { selection: false, ranges: out };
+  }
+
+  function composeCollect() {
+    const found = composeRanges();
+    ranges = found.ranges;
+    parts = ranges.map((r) => walk(!found.selection, r).map((node) => ({ node, text: part(node, r) })));
+    return { selection: found.selection, texts: parts.flat().map((p) => unwrap(splitWhitespace(p.text)[1])) };
+  }
+
+  // Replace each Range with a copy of itself in which only the translatable text nodes carry the Translation. The
+  // clone mirrors the Range, so its text nodes pair up with the live ones by index.
+  function composeInsert(texts) {
+    const sel = window.getSelection();
+    let i = 0;
+    for (const [k, r] of ranges.entries()) {
+      const byNode = new Map(parts[k].map((p) => [p.node, p.text]));
+      const frag = r.cloneContents();
+      const live = textNodes(document.body, r);
+      textNodes(frag).forEach((copy, j) => {
+        const text = byNode.get(live[j]);
+        if (text === undefined) return;
+        const [lead, core, trail] = splitWhitespace(text);
+        copy.nodeValue = lead + (texts[i++] ?? core) + trail;
+      });
+      const div = document.createElement('div');
+      div.append(frag);
+      sel.removeAllRanges();
+      sel.addRange(r);
+      if (!document.execCommand('insertHTML', false, div.innerHTML)) return { inserted: false };
+    }
+    return { inserted: true };
+  }
+
+  api.runtime.onMessage.addListener((msg) => {
+    switch (msg.cmd) {
+      case 'apply':
+        translation = { subject: msg.subject, texts: msg.texts, note: msg.note };
+        settingsKey = msg.settingsKey;
+        apply(translation);
+        return Promise.resolve({ shown: true });
+      case 'toggle':
+        if (shown) { restore(); return Promise.resolve({ shown: false }); }
+        if (translation && settingsKey === msg.settingsKey) { apply(translation); return Promise.resolve({ shown: true }); }
+        return Promise.resolve({ shown: false, texts: collect(msg.skipQuoted) });
+      case 'composeCollect':
+        return Promise.resolve(composeCollect());
+      case 'composeInsert':
+        return Promise.resolve(composeInsert(msg.texts));
+      default:
+        return undefined;
+    }
+  });
+}
+```
+
+- [ ] **Step 4: Background handlers**
+
+In `src/background.js`, replace the `composeState` function and the `composeTranslate` function (with its two-line comment) — everything from `async function composeState(tabId) {` through the closing `}` of `composeTranslate` — with:
+
+```js
+async function composeState(tabId) {
+  await inject(tabId);
+  const { selection } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeCollect' });
+  return { selection, suggested: await suggestedLanguage(tabId, await loadSettings()), busy: inFlight.has(tabId) };
+}
+
+// Translate the selection, or the whole draft with quoted text and signature excluded, into `lang`. The content
+// script writes through the editor, so Ctrl+Z reverts it. No cache: drafts change. Errors are returned, not
+// thrown — the popup renders them.
+async function composeTranslate(tabId, lang) {
+  if (inFlight.has(tabId)) return { busy: true };
+  inFlight.add(tabId);
+  let provider;
+  try {
+    const s = await loadSettings();
+    provider = s.provider;
+    if (!s.configured) {
+      await messenger.runtime.openOptionsPage();
+      return { error: 'setupFirst' };
+    }
+    await inject(tabId);
+    const { texts } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeCollect' });
+    if (texts.length === 0) return { error: 'nothingToTranslate' };
+    const r = await translateAll(provider, texts, lang, s.creds);
+    if (r.detected === lang) return { alreadyIn: lang };
+    const { inserted } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeInsert', texts: r.texts });
+    if (!inserted) return { error: 'errorGeneric', provider };
+    await messenger.storage.local.set({ replyLang: lang });
+    return { from: r.detected, to: lang };
+  } catch (e) {
+    console.error(e);
+    return { error: errorKey(e, provider), details: e.message, provider, status: e.status };
+  } finally {
+    inFlight.delete(tabId);
+  }
+}
+```
+
+- [ ] **Step 5: Locale and popup**
+
+In `_locales/en/messages.json`, after `"translateReply"` add:
+
+```json
+  "translateSelection": { "message": "Translate selection" },
+```
+
+In `src/compose.js`:
+- Replace the two-line header comment with:
+  ```js
+  // compose_action popup: one language select, one button. The background does all the work, so closing the
+  // popup mid-translation cancels nothing. Undo is the editor's own: Ctrl+Z reverts a translation.
+  ```
+- In `render`, replace `$('go').textContent = t(r.shown ? 'showOriginal' : 'translate');` with `$('go').textContent = t(r.selection ? 'translateSelection' : 'translate');`
+
+- [ ] **Step 6: Checks**
+
+Run: `node --check src/content.js && node --check src/background.js && node --check src/compose.js && npm test`
+Expected: no syntax errors; 27/27 PASS. `grep -n "shown\|state'\|reuse\|unchanged" src/background.js src/compose.js` prints nothing (`shown` survives only in `src/content.js`, reading side).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/text.js test/text.test.js src/content.js src/background.js src/compose.js _locales/en/messages.json
+git commit -m "Compose: write translations through the editor (Ctrl+Z undoes); translate the selection when there is one; skip plain-text quotes"
+```
+
+- [ ] **Step 8: STOP — human check (Luka)**
+
+Reload the temporary add-on. In a compose window:
+1. **HTML reply**, no selection → Translate → reply text translated, quote / `On … wrote:` / signature / bold / link intact; status `Translated: X → Y`. **Ctrl+Z** → everything back in one step. **Ctrl+Y** → translated again.
+2. **Plain-text reply** → same; the `>` quoted lines untouched this time.
+3. **Selection**: select part of a sentence (start and end mid-word), open the popup → button reads **Translate selection** → click → only that part is translated; Ctrl+Z reverts it.
+4. **Selection inside the quote** → translated (explicit selection wins).
+5. **New message** → language preselected to the last one used; `Already in <language>` when the draft is in it; `Nothing to translate` on an empty draft.
+6. **Send** a translated plain-text reply to yourself → line breaks intact, quote intact.
+7. **Popup closed mid-flight** → reopen → `Translating…` disabled; the translation lands anyway.
+
+---
+
 ### Task 6: Docs, roadmap, version, package
 
 **Files:**
@@ -691,7 +976,7 @@ Reload the temporary add-on. In a compose window:
 After the paragraph starting "The button is also bound to **Ctrl+Shift+X**", insert:
 
 ```markdown
-In a compose window, the **Translate reply** button translates what you wrote into the language of the message you are answering (preselected when you translated that message; pick any language otherwise). Quoted text and your signature are left alone, the subject is not touched, and **Show original** brings your text back — and **Translate** brings the translation back with any edits you made to it, without another Provider call, as long as the original text was not changed in between. Ctrl+Z does not undo a translation.
+In a compose window, the **Translate reply** button translates what you wrote into the language of the message you are answering (preselected when you translated that message; pick any language otherwise). Select some text first to translate only that. Quoted text and your signature are left alone (unless selected), the subject is not touched, and the translation is written through the editor, so **Ctrl+Z** undoes it and Ctrl+Y brings it back.
 ```
 
 Change the first sentence of the README from "…adds a **Translate** button to the message header toolbar." to "…adds a **Translate** button to the message header toolbar and a **Translate reply** button to the compose toolbar."
@@ -731,18 +1016,17 @@ Install `translate-mail-0.3.0.xpi` via Add-ons and Themes → gear → Install A
 
 ## B. Compose side
 
-2. **Reply, known language** → translate a foreign message on the reading side, Reply → **Translate reply** button → popup preselects that Source Language → Translate → your text translated in place; quoted block, `On … wrote:` and signature untouched; nothing inserted above your text; status `Translated: X → Y`, button `Show original`.
-3. **Show original** → your text back exactly; status empty.
-4. **Edit then re-translate** → change your text, Translate → new text translated.
-4b. **Edits survive the round trip** → Translate, edit a translated sentence, Show original, Translate → the edited translation is back instantly (no Provider call).
+2. **Reply, known language** → translate a foreign message on the reading side, Reply → **Translate reply** button → popup preselects that Source Language → Translate → your text translated in place; quoted block, `On … wrote:`, signature, bold and links untouched; nothing inserted above your text; status `Translated: X → Y`.
+3. **Undo / redo** → Ctrl+Z → everything back in one step; Ctrl+Y → translated again.
+4. **Selection** → select part of a sentence (mid-word boundaries), open the popup → button reads `Translate selection` → only that part is translated; Ctrl+Z reverts. A selection inside the quote is translated too.
 5. **New message** → language preselected to the last one used.
 6. **Already in** → draft in the picked language → `Already in <language>`, untouched.
 7. **Empty draft** → `Nothing to translate`.
 8. **Bad key** → break the key in Options → Provider error text in the popup, raw response in its tooltip. Fix the key.
 9. **No Provider configured** → clear the key → Translate → Options page opens, popup says `Set up a Provider in the add-on settings first`. Restore the key.
-10. **Plain-text compose** → steps 2–3.
-11. **Popup closed mid-flight** → long draft, Translate, close popup at once, reopen → `Translating…`, button disabled; reopen later → `Show original`.
-12. **Send** → send a translated reply to yourself → received body is the translation, quoted part original.
+10. **Plain-text compose** → steps 2–4; the `>` quoted lines stay untouched.
+11. **Popup closed mid-flight** → long draft, Translate, close popup at once, reopen → `Translating…`, button disabled; the translation lands anyway.
+12. **Send** → send a translated reply to yourself, HTML and plain text → received body is the translation with its line breaks, quoted part original.
 ```
 
 - [ ] **Step 6: Tests and package**
