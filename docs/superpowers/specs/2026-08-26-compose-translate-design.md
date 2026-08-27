@@ -41,6 +41,13 @@ The reading side keeps its 0.2.0 logic unchanged (`toggle` / `apply`, direct tex
 - **`composeInsert`** `{ texts }` → `{ inserted }`. For each remembered Range: `cloneContents()`, walk the live text nodes intersecting the Range and the fragment's text nodes in parallel (same order, same count — the clone mirrors the Range), write each translated text (leading/trailing whitespace of the collected part re-attached) into the fragment's counterpart of a translatable node, leave every other node as is, select the Range and `document.execCommand('insertHTML', false, fragmentHTML)`. `inserted` is false if `execCommand` reports failure; nothing is written directly.
 - `text.js` `SKIP_SELECTOR` gains `span[_moz_quote]`: the plain-text compose editor wraps a quotation in `<span _moz_quote="true">` (Gecko `HTMLEditor::InsertAsPlaintextQuotation`), not `blockquote[type=cite]`; only the "On … wrote:" line carries `.moz-cite-prefix`.
 
+## Translation quality (2026-08-27, after the compose smoke test; applies to both sides)
+The example reply `Hello, / this is an example message. / Link: <url> / This is a <b>bold</b> part of the text.` showed three Provider-side effects of translating text nodes one by one:
+- **Trailing punctuation.** DeepL returned `Pozdrav` for `Hello,` and `dio teksta` for `part of the text.`. `translateAll` re-appends the source's trailing `.,;:!?…` when the Translation ends with no sentence punctuation of its own (`keepEnding`).
+- **Bare links.** `https://github.com/havrlisan` was the longest item, so the whole detection came from a URL (`id`). `shouldTranslate` rejects bare URLs and e-mail addresses (`BARE_LINK`); sentences containing a link are still sent whole.
+- **Pinned Source Language.** `bold` on its own was detected as Danish and became *lopta* (ball). `translateAll` now makes one request for the longest text alone (that is the detection), then one chunked round for the rest with the Source Language pinned — every Provider's `translate` takes an optional `source` (DeepL `source_lang`, Google `source`, Microsoft `from`, Yandex `sourceLanguageCode`). Same characters billed, one extra small request; the second round is skipped when `detected === target`. Trade-off, accepted: a body that mixes two languages outside the quote is translated as one language (the roadmap's "per-item detection" item stays parked until a real report).
+- Not done: Provider HTML tag handling for sentences split by inline formatting — the settled "text nodes only" decision; a roadmap item if it matters.
+
 ## Limitations (documented, not fought)
 - Typing while "Translating…" is in progress: the run is replaced when the translation lands (new text inside it is overwritten); Ctrl+Z brings everything back.
 - The plain-text compose editor is the same HTML editor internally; `insertHTML` works there too (spike 2026-08-27). Line breaks of a sent plain-text reply are verified by the smoke test, not by code.
@@ -51,7 +58,7 @@ The reading side keeps its 0.2.0 logic unchanged (`toggle` / `apply`, direct tex
 `manifest.json`, `src/compose.html`, `src/compose.js`, `src/background.js`, `src/content.js`, `src/text.js`, `src/cache.js`, `test/cache.test.js`, `test/text.test.js`, `_locales/en/messages.json` (`translateReply`, `translateSelection`, `composeInto`, `setupFirst`), `README.md`, `ROADMAP.md` (remove item 10), `docs/smoke-test-0.3.0.md`, version bump.
 
 ## Verification
-- `node --test`: `cachedDetected` (hit, miss, prefix must match the whole id); `SKIP_SELECTOR` pins `span[_moz_quote]`.
+- `node --test`: `cachedDetected` (hit, miss, prefix must match the whole id); `SKIP_SELECTOR` pins `span[_moz_quote]`; `shouldTranslate` rejects bare links; each Provider's `source` parameter; `translateAll` two-round flow (detect, pin, chunk, skip when already in target); `keepEnding`.
 - Checked 2026-08-26 on TB 154 (temporary add-on, `compose` permission): `scripting.executeScript` reaches the compose editor for HTML reply, plain-text reply and new message.
 - Checked 2026-08-27 on TB 154: `execCommand('insertHTML')` over the run of reply text → one Ctrl+Z reverts, Ctrl+Y re-applies, in both HTML and plain-text compose; quote, signature, bold and links intact.
 - Manual smoke test: HTML reply, plain-text reply (quote untouched), selection only (mid-node boundaries), new mail (no related message → last-used language), "Already in", Ctrl+Z / Ctrl+Y, error with a bad key, popup closed mid-translation, a sent plain-text reply keeps its line breaks.

@@ -965,6 +965,253 @@ Reload the temporary add-on. In a compose window:
 
 ---
 
+### Task 5d: Translation quality — punctuation, bare links, pinned Source Language (after the Task 5c smoke test)
+
+Luka's example reply lost the comma after "Hello," (DeepL returned `Pozdrav` for `Hello,` and `dio teksta` for `part of the text.`), and `<b>bold</b>` came back as *lopta* (ball): the item `bold` was auto-detected as Danish on its own, and the overall detection came from the URL `https://github.com/havrlisan`, the longest item. Spec section "Translation quality" describes the three fixes. All pure code in `src/providers.js` and `src/text.js`; both sides benefit.
+
+**Files:**
+- Modify: `src/text.js`, `test/text.test.js`
+- Modify: `src/providers.js`, `test/providers.test.js`
+
+**Interfaces:**
+- `PROVIDERS[id].translate(texts, target, creds, fetchFn, source?)` — new optional 5th argument: ISO 639-1 Source Language to pin (DeepL `source_lang`, Google `source`, Microsoft `from`, Yandex `sourceLanguageCode`); omitted → auto-detect as before.
+- `translateAll(providerId, texts, target, creds, fetchFn)` — signature unchanged; behavior: first request = the longest text alone (detection), second round = the rest with `source` pinned, skipped when `detected === target` (those texts come back unchanged); every result passes `keepEnding`.
+- `export function keepEnding(src, out)` — re-appends `src`'s trailing `.,;:!?…` when `out` ends with no sentence punctuation.
+- `TM_TEXT.shouldTranslate(s)` — additionally `false` for a bare URL or e-mail address.
+
+- [ ] **Step 1: Failing tests — `text.js`**
+
+Append to `test/text.test.js`:
+
+```js
+test('shouldTranslate rejects bare URLs and e-mail addresses but not sentences containing them', () => {
+  assert.equal(shouldTranslate('https://github.com/havrlisan'), false);
+  assert.equal(shouldTranslate('  http://example.com/path?q=1 '), false);
+  assert.equal(shouldTranslate('www.example.com'), false);
+  assert.equal(shouldTranslate('luka@example.com'), false);
+  assert.equal(shouldTranslate('Link: https://github.com/havrlisan'), true);
+  assert.equal(shouldTranslate('Write to luka@example.com today'), true);
+});
+```
+
+Run: `npm test` → this test FAILS (the first four assertions return `true`); everything else passes.
+
+- [ ] **Step 2: `text.js`**
+
+In `src/text.js`, insert before the line `globalThis.TM_TEXT = {`:
+
+```js
+// A bare URL or e-mail address: nothing to translate, and its length would make it the detection sample.
+const BARE_LINK = /^(?:https?:\/\/\S+|www\.\S+|[^\s@]+@[^\s@]+\.[^\s@]+)$/i;
+
+```
+
+and replace the `shouldTranslate` entry (comment + method) with:
+
+```js
+  // Only strings containing a letter — and not a bare link — are worth a Provider call.
+  shouldTranslate(s) {
+    const core = s.trim();
+    return /\p{L}/u.test(core) && !BARE_LINK.test(core);
+  },
+```
+
+Run: `npm test` → all pass.
+
+- [ ] **Step 3: Failing tests — `providers.js`**
+
+In `test/providers.test.js`:
+
+Change the import line to `import { PROVIDERS, chunk, translateAll, keepEnding, LIMITS, errorKey } from '../src/providers.js';`.
+
+Append to the end of the `google: HTML entities are decoded and nb maps to no` test (before its closing `});`):
+
+```js
+  const g = fakeFetch({ data: { translations: [{ translatedText: 'y', detectedSourceLanguage: 'de' }] } });
+  await PROVIDERS.google.translate(['x'], 'en', { apiKey: 'K' }, g, 'nb');
+  assert.equal(g.calls[0].json.source, 'no');
+```
+
+Append to the end of the `microsoft: …` test:
+
+```js
+  const h = fakeFetch([{ translations: [{ text: 'x', to: 'en' }] }]);
+  await PROVIDERS.microsoft.translate(['x'], 'en', { apiKey: 'K', region: 'westeurope' }, h, 'sr');
+  assert.equal(h.calls[0].url, 'https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=en&from=sr-Latn');
+```
+
+Append to the end of the `deepl: …` test:
+
+```js
+  const i = fakeFetch({ translations: [{ detected_source_language: 'EN', text: 'Hallo' }] });
+  await PROVIDERS.deepl.translate(['Hello'], 'de', { apiKey: 'abc' }, i, 'en');
+  assert.deepEqual(i.calls[0].json, { text: ['Hello'], target_lang: 'DE', source_lang: 'EN' });
+```
+
+Append to the end of the `yandex: …` test:
+
+```js
+  const h = fakeFetch({ translations: [{ text: 'x', detectedLanguageCode: 'nb' }] });
+  await PROVIDERS.yandex.translate(['x'], 'en', { apiKey: 'K', folderId: 'F' }, h, 'nb');
+  assert.equal(h.calls[0].json.sourceLanguageCode, 'no');
+```
+
+Replace the whole test `translateAll chunks, concatenates and takes detection from the chunk with the longest text` with these three:
+
+```js
+test('translateAll detects on the longest text alone, then translates the rest with the source pinned', async () => {
+  const calls = [];
+  const fetchFn = async (url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push({ q: body.q, source: body.source });
+    return { ok: true, status: 200, json: async () => ({ data: { translations: body.q.map((s) => ({ translatedText: s.toUpperCase(), detectedSourceLanguage: body.source ?? 'de' })) } }) };
+  };
+  const r = await translateAll('google', ['Hi', 'Hallo Welt und mehr', 'bold'], 'en', { apiKey: 'K' }, fetchFn);
+  assert.deepEqual(calls, [{ q: ['Hallo Welt und mehr'], source: undefined }, { q: ['Hi', 'bold'], source: 'de' }]);
+  assert.deepEqual(r, { texts: ['HI', 'HALLO WELT UND MEHR', 'BOLD'], detected: 'de' });
+});
+
+test('translateAll chunks the pinned round and keeps every text in place', async () => {
+  const calls = [];
+  const fetchFn = async (url, init) => {
+    const q = JSON.parse(init.body).q;
+    calls.push(q.length);
+    return { ok: true, status: 200, json: async () => ({ data: { translations: q.map((s) => ({ translatedText: s.toUpperCase(), detectedSourceLanguage: 'zh-CN' })) } }) };
+  };
+  const texts = Array.from({ length: 120 }, (_, i) => `t${i}`);
+  texts[110] = 'x'.repeat(100);
+  const r = await translateAll('google', texts, 'en', { apiKey: 'K' }, fetchFn);
+  assert.deepEqual(calls, [1, 50, 50, 19]);
+  assert.equal(r.texts.length, 120);
+  assert.equal(r.texts[0], 'T0');
+  assert.equal(r.texts[110], 'X'.repeat(100));
+  assert.equal(r.texts[119], 'T119');
+  assert.equal(r.detected, 'zh');
+});
+
+test('translateAll skips the second round when the text is already in the Target Language', async () => {
+  let calls = 0;
+  const fetchFn = async (url, init) => {
+    calls++;
+    const q = JSON.parse(init.body).q;
+    return { ok: true, status: 200, json: async () => ({ data: { translations: q.map((s) => ({ translatedText: s.toUpperCase(), detectedSourceLanguage: 'en' })) } }) };
+  };
+  const r = await translateAll('google', ['Hello there my friend', 'Hi'], 'en', { apiKey: 'K' }, fetchFn);
+  assert.equal(calls, 1);
+  assert.deepEqual(r, { texts: ['HELLO THERE MY FRIEND', 'Hi'], detected: 'en' });
+});
+```
+
+In the test `translateAll rejects when a provider returns fewer translations than requested`, the first request now carries one text and the fake answers with none; change its assertion to:
+
+```js
+    (e) => e.message.includes('1 texts') && e.message.includes('0 translations'),
+```
+
+Append a new test:
+
+```js
+test('keepEnding restores trailing punctuation the Provider dropped', () => {
+  assert.equal(keepEnding('Hello,', 'Pozdrav'), 'Pozdrav,');
+  assert.equal(keepEnding('part of the text.', 'dio teksta'), 'dio teksta.');
+  assert.equal(keepEnding('Wait...', 'Čekaj'), 'Čekaj...');
+  assert.equal(keepEnding('Hello,', 'Pozdrav,'), 'Pozdrav,');
+  assert.equal(keepEnding('Really?', '本当に？'), '本当に？');
+  assert.equal(keepEnding('Hello', 'Pozdrav'), 'Pozdrav');
+  assert.equal(keepEnding('"Hi."', 'Bok'), 'Bok');
+});
+```
+
+Run: `npm test` → the provider `source` assertions, the three new `translateAll` tests, the changed rejection test and the `keepEnding` test FAIL; everything else passes.
+
+- [ ] **Step 4: `providers.js`**
+
+Each Provider's `translate` gains a 5th parameter `source` (ISO 639-1, may be `undefined`). Apply these exact edits:
+
+google — replace the two lines building the request with:
+```js
+      const body = { q: texts, target: GOOGLE_TARGET[target] ?? target, format: 'text' };
+      if (source) body.source = GOOGLE_TARGET[source] ?? source;
+      const data = await postJson(fetchFn, url, {}, body);
+```
+and the signature with `async translate(texts, target, creds, fetchFn, source) {`.
+
+microsoft — signature `async translate(texts, target, creds, fetchFn, source) {`; replace the `url` line with:
+```js
+      const from = source ? `&from=${encodeURIComponent(MICROSOFT_TARGET[source] ?? source)}` : '';
+      const url = `https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=${encodeURIComponent(MICROSOFT_TARGET[target] ?? target)}${from}`;
+```
+
+deepl — signature `async translate(texts, target, creds, fetchFn, source) {`; after the `const body = …` line add:
+```js
+      if (source) body.source_lang = source.toUpperCase(); // no regional variants on the source side
+```
+
+yandex — signature `async translate(texts, target, creds, fetchFn, source) {`; after the `const body = …` line add:
+```js
+      if (source) body.sourceLanguageCode = YANDEX_TARGET[source] ?? source;
+```
+
+Update the header comment's second line to: `// Each \`translate\` handles ONE request, auto-detecting unless \`source\` is given; \`translateAll\` detects, pins and chunks.`
+
+Replace the whole `translateAll` function with:
+
+```js
+// DeepL drops the trailing punctuation of short fragments ("Hello," → "Pozdrav"); put it back when the
+// Translation ends without any sentence punctuation of its own.
+export function keepEnding(src, out) {
+  const m = /[.,;:!?…]+$/.exec(src);
+  return m && !/[.,;:!?…。！？、]$/.test(out) ? out + m[0] : out;
+}
+
+const code = (s) => (s || '').toLowerCase().split('-')[0];
+
+function checked(r, part) {
+  if (r.texts.length !== part.length) throw new Error(`Provider returned ${r.texts.length} translations for ${part.length} texts`);
+  return r;
+}
+
+// Detect on the longest text alone, then translate the rest with the Source Language pinned: a short fragment
+// ("bold") auto-detected on its own is a coin toss. Nothing is sent twice, and the second round is skipped when
+// the text is already in the Target Language (those texts come back unchanged).
+export async function translateAll(providerId, texts, target, creds, fetchFn = fetch) {
+  const provider = PROVIDERS[providerId];
+  if (!texts.length) return { texts: [], detected: '' };
+  const best = longestIndex(texts);
+  const first = checked(await provider.translate([texts[best]], target, creds, fetchFn), [texts[best]]);
+  const detected = code(first.detected);
+  const out = texts.slice();
+  out[best] = first.texts[0];
+  if (detected !== target) {
+    const rest = texts.map((_, i) => i).filter((i) => i !== best);
+    let k = 0;
+    for (const part of chunk(rest.map((i) => texts[i]))) {
+      const r = checked(await provider.translate(part, target, creds, fetchFn, detected || undefined), part);
+      for (const t of r.texts) out[rest[k++]] = t;
+    }
+  }
+  return { texts: out.map((t, i) => keepEnding(texts[i], t)), detected };
+}
+```
+
+Run: `npm test` → all pass — 31 tests (27 before + 1 `shouldTranslate` + 3 `translateAll` − 1 replaced + 1 `keepEnding`; the `source` assertions live inside existing tests).
+
+- [ ] **Step 5: Checks and commit**
+
+Run: `node --check src/providers.js && node --check src/text.js && npm test`
+Expected: all PASS, output pristine.
+
+```bash
+git add src/text.js test/text.test.js src/providers.js test/providers.test.js
+git commit -m "Translation quality: keep trailing punctuation, skip bare links, pin the Source Language after detecting on the longest text"
+```
+
+- [ ] **Step 6: STOP — human check (Luka)**
+
+Reload the temporary add-on, reply to the example message again (HTML and plain text) → `Pozdrav,` keeps its comma, `dio teksta.` its period, *bold* → *podebljani* (or similar), the URL untouched; status `Translated: English → Croatian`. Reading side: translate one message → still fine, "Already in" on a Croatian message makes one request only (check the add-on console's network tab if curious).
+
+---
+
 ### Task 6: Docs, roadmap, version, package
 
 **Files:**
@@ -976,7 +1223,7 @@ Reload the temporary add-on. In a compose window:
 After the paragraph starting "The button is also bound to **Ctrl+Shift+X**", insert:
 
 ```markdown
-In a compose window, the **Translate reply** button translates what you wrote into the language of the message you are answering (preselected when you translated that message; pick any language otherwise). Select some text first to translate only that. Quoted text and your signature are left alone (unless selected), the subject is not touched, and the translation is written through the editor, so **Ctrl+Z** undoes it and Ctrl+Y brings it back.
+In a compose window, the **Translate reply** button translates what you wrote into the language of the message you are answering (preselected when you translated that message; pick any language otherwise). Select some text first to translate only that. Bare links and e-mail addresses are never sent to the Provider. Quoted text and your signature are left alone (unless selected), the subject is not touched, and the translation is written through the editor, so **Ctrl+Z** undoes it and Ctrl+Y brings it back.
 ```
 
 Change the first sentence of the README from "…adds a **Translate** button to the message header toolbar." to "…adds a **Translate** button to the message header toolbar and a **Translate reply** button to the compose toolbar."
@@ -1027,6 +1274,7 @@ Install `translate-mail-0.3.0.xpi` via Add-ons and Themes → gear → Install A
 10. **Plain-text compose** → steps 2–4; the `>` quoted lines stay untouched.
 11. **Popup closed mid-flight** → long draft, Translate, close popup at once, reopen → `Translating…`, button disabled; the translation lands anyway.
 12. **Send** → send a translated reply to yourself, HTML and plain text → received body is the translation with its line breaks, quoted part original.
+13. **Fragments** → reply `Hello,` / `this is an example message.` / `Link: https://github.com/havrlisan` / `This is a <b>bold</b> part of the text.` (HTML) → comma and period kept, *bold* translated as an adjective, the URL untouched, status shows the right Source Language.
 ```
 
 - [ ] **Step 6: Tests and package**
