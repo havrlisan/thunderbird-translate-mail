@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import '../src/text.js';
 
-const { splitWhitespace, shouldTranslate, SKIP_TAGS, SKIP_SELECTOR } = globalThis.TM_TEXT;
+const { splitWhitespace, shouldTranslate, SKIP_TAGS, SKIP_SELECTOR, SAFE_URL } = globalThis.TM_TEXT;
 
 test('splitWhitespace keeps leading/trailing whitespace separate from the core', () => {
   assert.deepEqual(splitWhitespace('  Hallo Welt \n'), ['  ', 'Hallo Welt', ' \n']);
@@ -59,4 +59,9 @@ test('shouldTranslate rejects bare URLs and e-mail addresses but not sentences c
   assert.equal(shouldTranslate('luka@example.com'), false);
   assert.equal(shouldTranslate('Link: https://github.com/havrlisan'), true);
   assert.equal(shouldTranslate('Write to luka@example.com today'), true);
+});
+
+test('SAFE_URL allows mail-safe links and blocks script-bearing schemes', () => {
+  for (const u of ['https://x.y', 'HTTP://x', 'mailto:a@b.c', 'cid:abc', 'tel:+1', '#top', '/rel', 'rel.html', 'data:image/png;base64,AAAA']) assert.ok(SAFE_URL.test(u), u);
+  for (const u of ['javascript:alert(1)', 'JAVASCRIPT:x', 'vbscript:x', 'data:text/html,x', 'blob:abc']) assert.ok(!SAFE_URL.test(u), u);
 });

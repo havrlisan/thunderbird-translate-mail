@@ -27,4 +27,7 @@ globalThis.TM_TEXT = {
   // Quoted replies, "On … wrote:" lines, signatures and inline-forward headers (Thunderbird HTML + plain-text
   // rendering, Gmail, Apple Mail, plain-text compose). Skipped unless the user opts to translate quoted text too.
   SKIP_SELECTOR: 'blockquote[type=cite], span[_moz_quote], .gmail_quote, .moz-cite-prefix, .moz-signature, .moz-txt-sig, .moz-email-headers-table',
+  // URL schemes allowed back into a draft from a Provider's HTML: what mail links and inline images use; nothing that
+  // could carry script. Callers strip tab/CR/LF first (Gecko does when resolving, so "java\nscript:" is live).
+  SAFE_URL: /^(?:https?:|mailto:|cid:|tel:|#|\/|data:image\/|[^:]*$)/i,
 };

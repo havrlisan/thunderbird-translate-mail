@@ -3,7 +3,7 @@
 if (!globalThis.__translateMail) {
   globalThis.__translateMail = true;
   const api = globalThis.messenger ?? globalThis.browser; // content scripts: be safe about which global exists
-  const { splitWhitespace, shouldTranslate, unwrap, SKIP_TAGS, SKIP_SELECTOR } = globalThis.TM_TEXT;
+  const { splitWhitespace, shouldTranslate, unwrap, SKIP_TAGS, SKIP_SELECTOR, SAFE_URL } = globalThis.TM_TEXT;
 
   // Text nodes worth translating, in document order — within `range` when given.
   function walk(skipQuoted, range) {
@@ -78,7 +78,7 @@ if (!globalThis.__translateMail) {
   // ends a run, children without text (<br>) are neutral.
   function composeRanges() {
     const sel = window.getSelection();
-    if (sel.rangeCount && !sel.isCollapsed) return { selection: true, ranges: [sel.getRangeAt(0)] };
+    if (sel.rangeCount && !sel.isCollapsed) return { selection: true, ranges: [sel.getRangeAt(0).cloneRange()] }; // a copy: the live one moves with the caret
     const root = document.body;
     const childOf = (n) => { while (n.parentNode !== root) n = n.parentNode; return n; };
     const withText = new Set(walk(true).map(childOf));
@@ -137,14 +137,15 @@ if (!globalThis.__translateMail) {
   }
 
   // Provider HTML back into the draft. Only the markup we sent can come back, but be strict anyway: no scripts,
-  // no event handlers, no javascript: links. Lifted subtrees return in place of their placeholders (`used` collects
-  // the ids seen, so a placeholder the Provider dropped can be appended by the caller).
+  // no event handlers, only mail-safe URL schemes (SAFE_URL). Lifted subtrees return in place of their placeholders
+  // (`used` collects the ids seen, so a placeholder the Provider dropped can be appended by the caller).
   function clean(html, used) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    for (const el of doc.querySelectorAll('script, style, iframe, object, embed, link, meta, base')) el.remove();
+    for (const el of doc.querySelectorAll('script, style, iframe, object, embed, link, meta, base, form, input, button, svg')) el.remove();
     for (const el of doc.body.querySelectorAll('*')) {
       for (const a of [...el.attributes]) {
-        if (/^on/i.test(a.name) || (/(^|:)(href|src|action|formaction)$/i.test(a.name) && /^\s*javascript:/i.test(a.value))) el.removeAttribute(a.name);
+        const url = /(^|:)(href|src|action|formaction)$/i.test(a.name);
+        if (/^on/i.test(a.name) || (url && !SAFE_URL.test(a.value.replace(/[\t\n\r]/g, '').trim()))) el.removeAttribute(a.name);
       }
     }
     for (const ph of doc.body.querySelectorAll('span[data-tm]')) {
@@ -157,10 +158,11 @@ if (!globalThis.__translateMail) {
 
   function composeInsert(texts) {
     if (texts.length !== counts.reduce((a, b) => a + b, 0)) return { inserted: false };
+    // Draft changed while the Provider worked? Refuse before writing anything, so no run is left half done.
+    if (ranges.some((r, k) => outer(r.cloneContents()) !== before[k])) return { inserted: false };
     const sel = window.getSelection();
     let i = 0;
     for (const [k, r] of ranges.entries()) {
-      if (outer(r.cloneContents()) !== before[k]) return { inserted: false }; // draft changed meanwhile: refuse rather than overwrite
       const used = new Set();
       let html = texts.slice(i, i + counts[k]).map((t) => clean(t, used)).join('');
       i += counts[k];
@@ -185,7 +187,7 @@ if (!globalThis.__translateMail) {
         if (translation && settingsKey === msg.settingsKey) { apply(translation); return Promise.resolve({ shown: true }); }
         return Promise.resolve({ shown: false, texts: collect(msg.skipQuoted) });
       case 'composeCollect':
-        return Promise.resolve(composeCollect(msg.max ?? 10000));
+        return Promise.resolve(composeCollect(msg.max ?? 10000)); // fallback = LIMITS.maxChars in providers.js
       case 'composeInsert':
         return Promise.resolve(composeInsert(msg.texts));
       default:

@@ -20,4 +20,6 @@ Install `translate-mail-0.3.0.xpi` via Add-ons and Themes → gear → Install A
 11. **Popup closed mid-flight** → long draft, Translate, close popup at once, reopen → `Translating…`, button disabled; the translation lands anyway.
 12. **Send** → send a translated reply to yourself, HTML and plain text → received body is the translation with its line breaks, quoted part original.
 13. **Fragments** → reply `Hello,` / `this is an example message.` / `Link: https://github.com/havrlisan` / `This is a <b>bold</b> part of the text.` (HTML) → comma and period kept, *bold* agrees with its sentence and is still bold, the link still a link, status shows the right Source Language.
+14a. **Interleaved reply edited mid-flight** → reply text both above and below the quote, Translate, and while `Translating…` type into the lower block → the popup shows the generic error and *nothing* was written (neither block).
+14b. **Selection, then click away** → select a sentence, Translate, and while `Translating…` click into the editor (collapsing the selection) → the selection is still translated when the Provider answers.
 14. **Long reply** → paste ~12 000 characters of paragraphs → translated; one Ctrl+Z reverts the run.

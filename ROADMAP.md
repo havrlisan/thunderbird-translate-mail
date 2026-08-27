@@ -2,7 +2,7 @@
 
 Ideas for future releases, roughly ordered by value ÷ effort within each section. Nothing here is committed.
 
-Already settled elsewhere and deliberately not listed: auto-translate on open, privacy consent / sender exclusions, auto-showing cached Translations (all deferred to v3); an ad-hoc Target Language picker (not planned); HTML-mode translation (never — text nodes only).
+Already settled elsewhere and deliberately not listed: auto-translate on open, privacy consent / sender exclusions, auto-showing cached Translations (all deferred to v3); an ad-hoc Target Language picker (not planned); HTML-mode translation on the reading side (never — text nodes only; the compose side does send the reply's own HTML, see the 0.3.0 spec).
 
 ## UX
 
