@@ -13,7 +13,6 @@ Already settled elsewhere and deliberately not listed: auto-translate on open, p
 
 ## Bigger features (v2)
 
-10. **Compose side: translate my reply.** A `compose_action` button that translates the draft body into the Source Language of the message being replied to (already known from `detectedByTab`) or a picked language. Needs the `compose` permission and `getComposeDetails` / `setComposeDetails`. Completes the read-then-answer loop; the headline feature for v2.
 11. **Self-hosted / custom endpoint Provider.** A user-configured LibreTranslate- (or DeepLX-) compatible URL, optional key. Different from the rejected keyless Provider: it is the user's own server, and "mail never leaves my network" is a real selling point. Cost: URL field plus `optional_host_permissions` and `permissions.request()` at save time, since arbitrary hosts cannot be pre-declared. Decide first whether this counts as the same thing as the settled "no keyless Provider".
 12. **Formality.** DeepL `formality` (`more` / `less`), with Google/Microsoft equivalents where available. Single "Formal / informal" option. Glossaries: only if someone asks.
 
@@ -26,4 +25,4 @@ Already settled elsewhere and deliberately not listed: auto-translate on open, p
 
 ## Suggested next release
 
-Plan 10 as the v2 headline.
+10 shipped in 0.3.0. Next: `_execute_compose_action` shortcut once a key is verified to fire in a compose window (Ctrl+Shift+X is taken by the reading side); then 6 or 11.

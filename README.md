@@ -1,6 +1,6 @@
 # Translate Mail
 
-Thunderbird add-on (128+) that adds a **Translate** button to the message header toolbar. One click translates the subject and body of the message you are reading into your language, in place; click again to show the original. Bring your own API key for one of:
+Thunderbird add-on (128+) that adds a **Translate** button to the message header toolbar and a **Translate reply** button to the compose toolbar. One click translates the subject and body of the message you are reading into your language, in place; click again to show the original. Bring your own API key for one of:
 
 | Provider | Where to get credentials | Free tier |
 |---|---|---|
@@ -10,6 +10,8 @@ Thunderbird add-on (128+) that adds a **Translate** button to the message header
 | Yandex Translate | Yandex Cloud console → service account API key + folder ID | trial grant only |
 
 The button is also bound to **Ctrl+Shift+X** (change it under Add-ons and Themes → gear → Manage Extension Shortcuts).
+
+In a compose window, the **Translate reply** button translates what you wrote into the language of the message you are answering (preselected when you translated that message; pick any language otherwise). Select some text first to translate only that. Your reply is sent with its own formatting (as HTML), so bold text and links stay where they are and sentences are translated whole; quoted text and your signature are never sent unless you selected them. Bare links and e-mail addresses on their own are skipped. Quoted text and your signature are left alone (unless selected), the subject is not touched, and the translation is written through the editor, so **Ctrl+Z** undoes it and Ctrl+Y brings it back.
 
 Message text is sent to the selected Provider **only when you click Translate**. Translations are cached locally (200 most recent) so reopening a message is free.
 
