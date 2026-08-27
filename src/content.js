@@ -113,20 +113,22 @@ if (!globalThis.__translateMail) {
   // Replace each Range with a copy of itself in which only the translatable text nodes carry the Translation. The
   // clone mirrors the Range, so its text nodes pair up with the live ones by index.
   function composeInsert(texts) {
-    // Collected before a slow Provider call; if the draft changed meanwhile, fail rather than write into the wrong nodes.
-    if (parts.flat().length !== texts.length) return { inserted: false };
     const sel = window.getSelection();
     let i = 0;
     for (const [k, r] of ranges.entries()) {
       const byNode = new Map(parts[k].map((p) => [p.node, p.text]));
       const frag = r.cloneContents();
       const live = textNodes(document.body, r);
+      let matched = 0;
       textNodes(frag).forEach((copy, j) => {
         const text = byNode.get(live[j]);
         if (text === undefined) return;
+        matched++;
         const [lead, core, trail] = splitWhitespace(text);
         copy.nodeValue = lead + (texts[i++] ?? core) + trail;
       });
+      // Collected before a slow Provider call; if the draft's nodes changed meanwhile, fail rather than write into the wrong ones.
+      if (matched !== parts[k].length) return { inserted: false };
       const div = document.createElement('div');
       div.append(frag);
       sel.removeAllRanges();
