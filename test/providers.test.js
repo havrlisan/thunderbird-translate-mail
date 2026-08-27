@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PROVIDERS, chunk, translateAll, LIMITS, errorKey } from '../src/providers.js';
+import { PROVIDERS, chunk, translateAll, keepEnding, LIMITS, errorKey } from '../src/providers.js';
 
 // Fake fetch: records calls, answers with the given JSON body.
 function fakeFetch(body, status = 200) {
@@ -46,6 +46,10 @@ test('google: HTML entities are decoded and nb maps to no', async () => {
   const r = await PROVIDERS.google.translate(['x'], 'nb', { apiKey: 'K' }, f);
   assert.deepEqual(r.texts, [`Tom's cat & dog <b> "x"`]);
   assert.equal(f.calls[0].json.target, 'no');
+
+  const g = fakeFetch({ data: { translations: [{ translatedText: 'y', detectedSourceLanguage: 'de' }] } });
+  await PROVIDERS.google.translate(['x'], 'en', { apiKey: 'K' }, g, 'nb');
+  assert.equal(g.calls[0].json.source, 'no');
 });
 
 test('microsoft: request shape, response mapping, detection from the longest text', async () => {
@@ -64,6 +68,10 @@ test('microsoft: request shape, response mapping, detection from the longest tex
   const g = fakeFetch([{ detectedLanguage: { language: 'en', score: 1 }, translations: [{ text: '你好', to: 'zh-Hans' }] }]);
   await PROVIDERS.microsoft.translate(['Hello'], 'zh', { apiKey: 'K', region: 'westeurope' }, g);
   assert.equal(g.calls[0].url, 'https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=zh-Hans');
+
+  const h = fakeFetch([{ translations: [{ text: 'x', to: 'en' }] }]);
+  await PROVIDERS.microsoft.translate(['x'], 'en', { apiKey: 'K', region: 'westeurope' }, h, 'sr');
+  assert.equal(h.calls[0].url, 'https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=en&from=sr-Latn');
 });
 
 test('deepl: free keys go to api-free host, target codes are upper-cased with EN/PT variants', async () => {
@@ -86,6 +94,10 @@ test('deepl: free keys go to api-free host, target codes are upper-cased with EN
   const h = fakeFetch({ translations: [{ detected_source_language: 'EN', text: 'Hallo' }] });
   await PROVIDERS.deepl.translate(['Hello'], 'de', { apiKey: 'abc' }, h);
   assert.equal(h.calls[0].json.target_lang, 'DE');
+
+  const i = fakeFetch({ translations: [{ detected_source_language: 'EN', text: 'Hallo' }] });
+  await PROVIDERS.deepl.translate(['Hello'], 'de', { apiKey: 'abc' }, i, 'en');
+  assert.deepEqual(i.calls[0].json, { text: ['Hello'], target_lang: 'DE', source_lang: 'EN' });
 });
 
 test('yandex: request shape, response mapping, detection from the longest text', async () => {
@@ -103,6 +115,10 @@ test('yandex: request shape, response mapping, detection from the longest text',
   const g = fakeFetch({ translations: [{ text: 'Hei', detectedLanguageCode: 'en' }] });
   await PROVIDERS.yandex.translate(['Hello'], 'nb', { apiKey: 'K', folderId: 'F' }, g);
   assert.equal(g.calls[0].json.targetLanguageCode, 'no');
+
+  const h = fakeFetch({ translations: [{ text: 'x', detectedLanguageCode: 'nb' }] });
+  await PROVIDERS.yandex.translate(['x'], 'en', { apiKey: 'K', folderId: 'F' }, h, 'nb');
+  assert.equal(h.calls[0].json.sourceLanguageCode, 'no');
 });
 
 test('HTTP errors become an Error with status and body excerpt', async () => {
@@ -118,22 +134,46 @@ test('fetch rejections are tagged as network errors', async () => {
   await assert.rejects(PROVIDERS.deepl.translate(['x'], 'en', { apiKey: 'k:fx' }, f), (e) => e.network === true);
 });
 
-test('translateAll chunks, concatenates and takes detection from the chunk with the longest text', async () => {
+test('translateAll detects on the longest text alone, then translates the rest with the source pinned', async () => {
   const calls = [];
-  // The chunk holding the long text detects zh-CN, every other chunk detects fr.
+  const fetchFn = async (url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push({ q: body.q, source: body.source });
+    return { ok: true, status: 200, json: async () => ({ data: { translations: body.q.map((s) => ({ translatedText: s.toUpperCase(), detectedSourceLanguage: body.source ?? 'de' })) } }) };
+  };
+  const r = await translateAll('google', ['Hi', 'Hallo Welt und mehr', 'bold'], 'en', { apiKey: 'K' }, fetchFn);
+  assert.deepEqual(calls, [{ q: ['Hallo Welt und mehr'], source: undefined }, { q: ['Hi', 'bold'], source: 'de' }]);
+  assert.deepEqual(r, { texts: ['HI', 'HALLO WELT UND MEHR', 'BOLD'], detected: 'de' });
+});
+
+test('translateAll chunks the pinned round and keeps every text in place', async () => {
+  const calls = [];
   const fetchFn = async (url, init) => {
     const q = JSON.parse(init.body).q;
     calls.push(q.length);
-    const lang = q.some((s) => s.length > 50) ? 'zh-CN' : 'fr';
-    return { ok: true, status: 200, json: async () => ({ data: { translations: q.map((s) => ({ translatedText: s.toUpperCase(), detectedSourceLanguage: lang })) } }) };
+    return { ok: true, status: 200, json: async () => ({ data: { translations: q.map((s) => ({ translatedText: s.toUpperCase(), detectedSourceLanguage: 'zh-CN' })) } }) };
   };
   const texts = Array.from({ length: 120 }, (_, i) => `t${i}`);
-  texts[110] = 'x'.repeat(100); // lands in the last chunk, so the first chunk's `fr` must not win
+  texts[110] = 'x'.repeat(100);
   const r = await translateAll('google', texts, 'en', { apiKey: 'K' }, fetchFn);
-  assert.deepEqual(calls, [50, 50, 20]);
+  assert.deepEqual(calls, [1, 50, 50, 19]);
   assert.equal(r.texts.length, 120);
+  assert.equal(r.texts[0], 'T0');
+  assert.equal(r.texts[110], 'X'.repeat(100));
   assert.equal(r.texts[119], 'T119');
   assert.equal(r.detected, 'zh');
+});
+
+test('translateAll skips the second round when the text is already in the Target Language', async () => {
+  let calls = 0;
+  const fetchFn = async (url, init) => {
+    calls++;
+    const q = JSON.parse(init.body).q;
+    return { ok: true, status: 200, json: async () => ({ data: { translations: q.map((s) => ({ translatedText: s.toUpperCase(), detectedSourceLanguage: 'en' })) } }) };
+  };
+  const r = await translateAll('google', ['Hello there my friend', 'Hi'], 'en', { apiKey: 'K' }, fetchFn);
+  assert.equal(calls, 1);
+  assert.deepEqual(r, { texts: ['HELLO THERE MY FRIEND', 'Hi'], detected: 'en' });
 });
 
 test('translateAll rejects when a provider returns fewer translations than requested', async () => {
@@ -143,7 +183,7 @@ test('translateAll rejects when a provider returns fewer translations than reque
   };
   await assert.rejects(
     translateAll('google', ['Hallo', 'Welt'], 'en', { apiKey: 'K' }, fetchFn),
-    (e) => e.message.includes('2 texts') && e.message.includes('1 translations'),
+    (e) => e.message.includes('1 texts') && e.message.includes('0 translations'),
   );
 });
 
@@ -160,4 +200,14 @@ test('errorKey maps HTTP status / network failures to the i18n message key', () 
   assert.equal(errorKey({ status: 500 }, 'deepl'), 'errorHttp');
   assert.equal(errorKey({ network: true }, 'deepl'), 'errorNetwork');
   assert.equal(errorKey(new Error('x'), 'deepl'), 'errorGeneric');
+});
+
+test('keepEnding restores trailing punctuation the Provider dropped', () => {
+  assert.equal(keepEnding('Hello,', 'Pozdrav'), 'Pozdrav,');
+  assert.equal(keepEnding('part of the text.', 'dio teksta'), 'dio teksta.');
+  assert.equal(keepEnding('Wait...', 'Čekaj'), 'Čekaj...');
+  assert.equal(keepEnding('Hello,', 'Pozdrav,'), 'Pozdrav,');
+  assert.equal(keepEnding('Really?', '本当に？'), '本当に？');
+  assert.equal(keepEnding('Hello', 'Pozdrav'), 'Pozdrav');
+  assert.equal(keepEnding('"Hi."', 'Bok'), 'Bok');
 });

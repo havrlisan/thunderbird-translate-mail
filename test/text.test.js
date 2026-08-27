@@ -51,3 +51,12 @@ test('unwrap joins hard-wrapped lines but keeps paragraphs, lists, indents and s
 test('SKIP_SELECTOR covers the plain-text compose quotation span', () => {
   assert.ok(SKIP_SELECTOR.includes('span[_moz_quote]'));
 });
+
+test('shouldTranslate rejects bare URLs and e-mail addresses but not sentences containing them', () => {
+  assert.equal(shouldTranslate('https://github.com/havrlisan'), false);
+  assert.equal(shouldTranslate('  http://example.com/path?q=1 '), false);
+  assert.equal(shouldTranslate('www.example.com'), false);
+  assert.equal(shouldTranslate('luka@example.com'), false);
+  assert.equal(shouldTranslate('Link: https://github.com/havrlisan'), true);
+  assert.equal(shouldTranslate('Write to luka@example.com today'), true);
+});
