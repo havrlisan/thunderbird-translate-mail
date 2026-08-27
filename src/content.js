@@ -5,19 +5,11 @@ if (!globalThis.__translateMail) {
   const api = globalThis.messenger ?? globalThis.browser; // content scripts: be safe about which global exists
   const { splitWhitespace, shouldTranslate, unwrap, SKIP_TAGS, SKIP_SELECTOR } = globalThis.TM_TEXT;
 
-  // The part of text node `n` inside `range` (all of it without a range).
-  function part(n, range) {
-    if (!range) return n.nodeValue;
-    const start = n === range.startContainer ? range.startOffset : 0;
-    const end = n === range.endContainer ? range.endOffset : n.nodeValue.length;
-    return n.nodeValue.slice(start, end);
-  }
-
   // Text nodes worth translating, in document order — within `range` when given.
   function walk(skipQuoted, range) {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) =>
-        !SKIP_TAGS.has(n.parentNode?.nodeName) && (!range || range.intersectsNode(n)) && shouldTranslate(part(n, range)) &&
+        !SKIP_TAGS.has(n.parentNode?.nodeName) && (!range || range.intersectsNode(n)) && shouldTranslate(n.nodeValue) &&
         !(skipQuoted && n.parentElement?.closest(SKIP_SELECTOR))
           ? NodeFilter.FILTER_ACCEPT
           : NodeFilter.FILTER_REJECT,
@@ -66,20 +58,19 @@ if (!globalThis.__translateMail) {
     shown = false;
   }
 
-  // --- Compose editor: write through execCommand, so one Ctrl+Z reverts a run and Ctrl+Y re-applies it. ---
+  // --- Compose editor: each run of reply text goes to the Provider as HTML (so sentences keep their inline
+  // formatting and their context) and comes back as HTML, written through execCommand so one Ctrl+Z reverts a
+  // run and Ctrl+Y re-applies it. ---
 
-  let ranges = [];  // one Range per run (or the selection)
-  let parts = [];   // per Range: [{ node, text }] — the translatable text nodes and the part of each inside the Range
+  let ranges = [];   // one Range per run (or the selection)
+  let counts = [];   // per Range: how many HTML items it was split into
+  let kept = [];     // subtrees lifted out of the sent HTML (quote block, signature), by placeholder id
+  let keptSpan = []; // per Range: [first, end) of its ids in `kept`
 
-  // Every text node inside `root` (a fragment), or the body's text nodes intersecting `range`, in document order.
-  function textNodes(root, range) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, range
-      ? { acceptNode: (n) => (range.intersectsNode(n) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) }
-      : null);
-    const out = [];
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) out.push(n);
-    return out;
-  }
+  // Where an oversized run may be split: only between lines / blocks, never inside a sentence.
+  const BREAK = 'br, div, p, ul, ol, table, pre, hr, h1, h2, h3, h4, h5, h6, blockquote';
+
+  const outer = (node) => { const div = document.createElement('div'); div.append(node); return div.innerHTML; };
 
   // The selection when there is one (quoted text counts then: it was picked on purpose); otherwise one Range per
   // run of body children holding reply text — a child with text but nothing to translate (quote block, signature)
@@ -103,37 +94,78 @@ if (!globalThis.__translateMail) {
     return { selection: false, ranges: out };
   }
 
-  function composeCollect() {
-    const found = composeRanges();
-    ranges = found.ranges;
-    parts = ranges.map((r) => walk(!found.selection, r).map((node) => ({ node, text: part(node, r) })));
-    return { selection: found.selection, texts: parts.flat().map((p) => unwrap(splitWhitespace(p.text)[1])) };
+  // HTML items for one Range: its cloned contents, skipped subtrees replaced by empty placeholders, split only at
+  // line / block boundaries once an item exceeds `max` characters (a single oversized block goes alone).
+  function items(r, skipQuoted, max) {
+    const frag = r.cloneContents();
+    if (skipQuoted) {
+      for (const el of frag.querySelectorAll(SKIP_SELECTOR)) {
+        if (el.parentElement?.closest(SKIP_SELECTOR)) continue; // nested inside a subtree already lifted
+        const ph = document.createElement('span');
+        ph.dataset.tm = String(kept.push(el) - 1);
+        el.replaceWith(ph);
+      }
+    }
+    const out = [];
+    let cur = '';
+    for (const child of [...frag.childNodes]) {
+      const html = outer(child);
+      if (cur && cur.length + html.length > max && child.nodeType === 1 && child.matches(BREAK)) { out.push(cur); cur = ''; }
+      cur += html;
+    }
+    if (cur) out.push(cur);
+    return out;
   }
 
-  // Replace each Range with a copy of itself in which only the translatable text nodes carry the Translation. The
-  // clone mirrors the Range, so its text nodes pair up with the live ones by index.
+  function composeCollect(max) {
+    const found = composeRanges();
+    const skipQuoted = !found.selection;
+    kept = [];
+    keptSpan = [];
+    ranges = found.ranges.filter((r) => walk(skipQuoted, r).length);
+    const texts = [];
+    counts = ranges.map((r) => {
+      const from = kept.length;
+      const it = items(r, skipQuoted, max);
+      keptSpan.push([from, kept.length]);
+      texts.push(...it);
+      return it.length;
+    });
+    return { selection: found.selection, texts };
+  }
+
+  // Provider HTML back into the draft. Only the markup we sent can come back, but be strict anyway: no scripts,
+  // no event handlers, no javascript: links. Lifted subtrees return in place of their placeholders (`used` collects
+  // the ids seen, so a placeholder the Provider dropped can be appended by the caller).
+  function clean(html, used) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    for (const el of doc.querySelectorAll('script, style, iframe, object, embed, link, meta')) el.remove();
+    for (const el of doc.body.querySelectorAll('*')) {
+      for (const a of [...el.attributes]) {
+        if (/^on/i.test(a.name) || (/^(href|src|action|formaction)$/i.test(a.name) && /^\s*javascript:/i.test(a.value))) el.removeAttribute(a.name);
+      }
+    }
+    for (const ph of doc.body.querySelectorAll('span[data-tm]')) {
+      const id = Number(ph.dataset.tm);
+      used.add(id);
+      ph.replaceWith(kept[id] ?? '');
+    }
+    return doc.body.innerHTML;
+  }
+
   function composeInsert(texts) {
+    if (texts.length !== counts.reduce((a, b) => a + b, 0)) return { inserted: false };
     const sel = window.getSelection();
     let i = 0;
     for (const [k, r] of ranges.entries()) {
-      const byNode = new Map(parts[k].map((p) => [p.node, p.text]));
-      const frag = r.cloneContents();
-      const live = textNodes(document.body, r);
-      let matched = 0;
-      textNodes(frag).forEach((copy, j) => {
-        const text = byNode.get(live[j]);
-        if (text === undefined) return;
-        matched++;
-        const [lead, core, trail] = splitWhitespace(text);
-        copy.nodeValue = lead + (texts[i++] ?? core) + trail;
-      });
-      // Collected before a slow Provider call; if the draft's nodes changed meanwhile, fail rather than write into the wrong ones.
-      if (matched !== parts[k].length) return { inserted: false };
-      const div = document.createElement('div');
-      div.append(frag);
+      const used = new Set();
+      let html = texts.slice(i, i + counts[k]).map((t) => clean(t, used)).join('');
+      i += counts[k];
+      const [from, end] = keptSpan[k];
+      for (let id = from; id < end; id++) if (!used.has(id)) html += outer(kept[id]);
       sel.removeAllRanges();
       sel.addRange(r);
-      if (!document.execCommand('insertHTML', false, div.innerHTML)) return { inserted: false };
+      if (!document.execCommand('insertHTML', false, html)) return { inserted: false };
     }
     return { inserted: true };
   }
@@ -150,7 +182,7 @@ if (!globalThis.__translateMail) {
         if (translation && settingsKey === msg.settingsKey) { apply(translation); return Promise.resolve({ shown: true }); }
         return Promise.resolve({ shown: false, texts: collect(msg.skipQuoted) });
       case 'composeCollect':
-        return Promise.resolve(composeCollect());
+        return Promise.resolve(composeCollect(msg.max ?? 10000));
       case 'composeInsert':
         return Promise.resolve(composeInsert(msg.texts));
       default:

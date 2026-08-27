@@ -1,4 +1,4 @@
-import { PROVIDERS, translateAll, errorKey } from './providers.js';
+import { PROVIDERS, translateAll, errorKey, LIMITS } from './providers.js';
 import { cacheKey, cachePut, cachedDetected } from './cache.js';
 
 const t = (key, subs) => messenger.i18n.getMessage(key, subs);
@@ -153,14 +153,14 @@ async function composeState(tabId) {
   let selection = false;
   if (!busy) {
     await inject(tabId);
-    ({ selection } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeCollect' }));
+    ({ selection } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeCollect', max: LIMITS.maxChars }));
   }
   return { selection, suggested: await suggestedLanguage(tabId, await loadSettings()), busy };
 }
 
-// Translate the selection, or the whole draft with quoted text and signature excluded, into `lang`. The content
-// script writes through the editor, so Ctrl+Z reverts it. No cache: drafts change. Errors are returned, not
-// thrown — the popup renders them.
+// Translate the selection, or the whole draft with quoted text and signature excluded, into `lang`. Each run
+// goes as HTML so sentences keep their inline formatting and their context. The content script writes through
+// the editor, so Ctrl+Z reverts it. No cache: drafts change. Errors are returned, not thrown — the popup renders them.
 async function composeTranslate(tabId, lang) {
   if (inFlight.has(tabId)) return { busy: true };
   inFlight.add(tabId);
@@ -173,9 +173,9 @@ async function composeTranslate(tabId, lang) {
       return { error: 'setupFirst' };
     }
     await inject(tabId);
-    const { texts } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeCollect' });
+    const { texts } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeCollect', max: LIMITS.maxChars });
     if (texts.length === 0) return { error: 'nothingToTranslate' };
-    const r = await translateAll(provider, texts, lang, s.creds);
+    const r = await translateAll(provider, texts, lang, s.creds, fetch, { html: true });
     if (r.detected === lang) return { alreadyIn: lang };
     const { inserted } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeInsert', texts: r.texts });
     if (!inserted) return { error: 'errorGeneric', provider };

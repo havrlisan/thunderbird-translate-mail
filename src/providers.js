@@ -44,7 +44,7 @@ const MICROSOFT_TARGET = { zh: 'zh-Hans', sr: 'sr-Latn' };
 const GOOGLE_TARGET = { nb: 'no' };
 const YANDEX_TARGET = { nb: 'no' };
 
-// Google v2 escapes HTML entities even with format=text.
+// Google v2 escapes HTML entities in text mode (format=text); in HTML mode the markup comes back as is.
 const decodeEntities = (s) =>
   s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 
@@ -53,22 +53,23 @@ export const PROVIDERS = {
     name: 'Google Cloud Translation',
     help: 'https://console.cloud.google.com/apis/credentials',
     fields: ['apiKey'],
-    async translate(texts, target, creds, fetchFn, source) {
+    async translate(texts, target, creds, fetchFn, { source, html } = {}) {
       const url = `https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(creds.apiKey)}`;
-      const body = { q: texts, target: GOOGLE_TARGET[target] ?? target, format: 'text' };
+      const body = { q: texts, target: GOOGLE_TARGET[target] ?? target, format: html ? 'html' : 'text' };
       if (source) body.source = GOOGLE_TARGET[source] ?? source;
       const data = await postJson(fetchFn, url, {}, body);
       const t = data.data.translations;
-      return { texts: t.map((x) => decodeEntities(x.translatedText)), detected: t[longestIndex(texts)]?.detectedSourceLanguage };
+      return { texts: t.map((x) => (html ? x.translatedText : decodeEntities(x.translatedText))), detected: t[longestIndex(texts)]?.detectedSourceLanguage };
     },
   },
   microsoft: {
     name: 'Microsoft Translator',
     help: 'https://portal.azure.com/#create/Microsoft.CognitiveServicesTextTranslation',
     fields: ['apiKey', 'region'],
-    async translate(texts, target, creds, fetchFn, source) {
+    async translate(texts, target, creds, fetchFn, { source, html } = {}) {
       const from = source ? `&from=${encodeURIComponent(MICROSOFT_TARGET[source] ?? source)}` : '';
-      const url = `https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=${encodeURIComponent(MICROSOFT_TARGET[target] ?? target)}${from}`;
+      const type = html ? '&textType=html' : '';
+      const url = `https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=${encodeURIComponent(MICROSOFT_TARGET[target] ?? target)}${from}${type}`;
       const headers = { 'Ocp-Apim-Subscription-Key': creds.apiKey, 'Ocp-Apim-Subscription-Region': creds.region };
       const data = await postJson(fetchFn, url, headers, texts.map((Text) => ({ Text })));
       return { texts: data.map((x) => x.translations[0].text), detected: data[longestIndex(texts)]?.detectedLanguage?.language };
@@ -78,10 +79,11 @@ export const PROVIDERS = {
     name: 'DeepL',
     help: 'https://www.deepl.com/your-account/keys',
     fields: ['apiKey'],
-    async translate(texts, target, creds, fetchFn, source) {
+    async translate(texts, target, creds, fetchFn, { source, html } = {}) {
       const host = creds.apiKey.endsWith(':fx') ? 'api-free.deepl.com' : 'api.deepl.com';
       const body = { text: texts, target_lang: DEEPL_TARGET[target] ?? target.toUpperCase() };
       if (source) body.source_lang = source.toUpperCase(); // no regional variants on the source side
+      if (html) body.tag_handling = 'html';
       const data = await postJson(fetchFn, `https://${host}/v2/translate`, { Authorization: `DeepL-Auth-Key ${creds.apiKey}` }, body);
       return { texts: data.translations.map((x) => x.text), detected: data.translations[longestIndex(texts)]?.detected_source_language?.toLowerCase() };
     },
@@ -90,9 +92,10 @@ export const PROVIDERS = {
     name: 'Yandex Translate',
     help: 'https://console.cloud.yandex.com/',
     fields: ['apiKey', 'folderId'],
-    async translate(texts, target, creds, fetchFn, source) {
+    async translate(texts, target, creds, fetchFn, { source, html } = {}) {
       const body = { folderId: creds.folderId, texts, targetLanguageCode: YANDEX_TARGET[target] ?? target };
       if (source) body.sourceLanguageCode = YANDEX_TARGET[source] ?? source;
+      if (html) body.format = 'HTML'; // per Yandex's API reference (PLAIN_TEXT is the default); unverified live, like the rest of Yandex
       const data = await postJson(fetchFn, 'https://translate.api.cloud.yandex.net/translate/v2/translate', { Authorization: `Api-Key ${creds.apiKey}` }, body);
       return { texts: data.translations.map((x) => x.text), detected: data.translations[longestIndex(texts)]?.detectedLanguageCode };
     },
@@ -109,8 +112,8 @@ export function errorKey(e, providerId) {
     : 'errorGeneric';
 }
 
-// DeepL drops the trailing punctuation of short fragments ("Hello," → "Pozdrav"); put it back when the
-// Translation ends without any sentence punctuation of its own.
+// Text mode only (HTML mode sends whole sentences): DeepL drops the trailing punctuation of short fragments
+// ("Hello," → "Pozdrav"); put it back when the Translation ends without any sentence punctuation of its own.
 export function keepEnding(src, out) {
   const m = /[.,;:!?…]+$/.exec(src);
   return m && !/[.,;:!?…。！？、]$/.test(out) ? out + m[0] : out;
@@ -126,11 +129,11 @@ function checked(r, part) {
 // Detect on the longest text alone, then translate the rest with the Source Language pinned: a short fragment
 // ("bold") auto-detected on its own is a coin toss. Nothing is sent twice, and the second round is skipped when
 // the text is already in the Target Language (those texts come back unchanged).
-export async function translateAll(providerId, texts, target, creds, fetchFn = fetch) {
+export async function translateAll(providerId, texts, target, creds, fetchFn = fetch, { html = false } = {}) {
   const provider = PROVIDERS[providerId];
   if (!texts.length) return { texts: [], detected: '' };
   const best = longestIndex(texts);
-  const first = checked(await provider.translate([texts[best]], target, creds, fetchFn), [texts[best]]);
+  const first = checked(await provider.translate([texts[best]], target, creds, fetchFn, { html }), [texts[best]]);
   const detected = code(first.detected);
   const out = texts.slice();
   out[best] = first.texts[0];
@@ -138,9 +141,9 @@ export async function translateAll(providerId, texts, target, creds, fetchFn = f
     const rest = texts.map((_, i) => i).filter((i) => i !== best);
     let k = 0;
     for (const part of chunk(rest.map((i) => texts[i]))) {
-      const r = checked(await provider.translate(part, target, creds, fetchFn, detected || undefined), part);
+      const r = checked(await provider.translate(part, target, creds, fetchFn, { source: detected || undefined, html }), part);
       for (const t of r.texts) out[rest[k++]] = t;
     }
   }
-  return { texts: out.map((t, i) => keepEnding(texts[i], t)), detected };
+  return { texts: out.map((t, i) => (html ? t : keepEnding(texts[i], t))), detected };
 }

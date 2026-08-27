@@ -48,8 +48,13 @@ test('google: HTML entities are decoded and nb maps to no', async () => {
   assert.equal(f.calls[0].json.target, 'no');
 
   const g = fakeFetch({ data: { translations: [{ translatedText: 'y', detectedSourceLanguage: 'de' }] } });
-  await PROVIDERS.google.translate(['x'], 'en', { apiKey: 'K' }, g, 'nb');
+  await PROVIDERS.google.translate(['x'], 'en', { apiKey: 'K' }, g, { source: 'nb' });
   assert.equal(g.calls[0].json.source, 'no');
+
+  const k = fakeFetch({ data: { translations: [{ translatedText: '<b>y</b> &amp; z', detectedSourceLanguage: 'de' }] } });
+  const rh = await PROVIDERS.google.translate(['<b>x</b> &amp; z'], 'en', { apiKey: 'K' }, k, { html: true });
+  assert.equal(k.calls[0].json.format, 'html');
+  assert.deepEqual(rh.texts, ['<b>y</b> &amp; z']); // HTML mode: the markup comes back as is, no entity decoding
 });
 
 test('microsoft: request shape, response mapping, detection from the longest text', async () => {
@@ -70,8 +75,12 @@ test('microsoft: request shape, response mapping, detection from the longest tex
   assert.equal(g.calls[0].url, 'https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=zh-Hans');
 
   const h = fakeFetch([{ translations: [{ text: 'x', to: 'en' }] }]);
-  await PROVIDERS.microsoft.translate(['x'], 'en', { apiKey: 'K', region: 'westeurope' }, h, 'sr');
+  await PROVIDERS.microsoft.translate(['x'], 'en', { apiKey: 'K', region: 'westeurope' }, h, { source: 'sr' });
   assert.equal(h.calls[0].url, 'https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=en&from=sr-Latn');
+
+  const m = fakeFetch([{ translations: [{ text: '<b>y</b>', to: 'en' }] }]);
+  await PROVIDERS.microsoft.translate(['<b>x</b>'], 'en', { apiKey: 'K', region: 'westeurope' }, m, { html: true });
+  assert.equal(m.calls[0].url, 'https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=en&textType=html');
 });
 
 test('deepl: free keys go to api-free host, target codes are upper-cased with EN/PT variants', async () => {
@@ -96,8 +105,12 @@ test('deepl: free keys go to api-free host, target codes are upper-cased with EN
   assert.equal(h.calls[0].json.target_lang, 'DE');
 
   const i = fakeFetch({ translations: [{ detected_source_language: 'EN', text: 'Hallo' }] });
-  await PROVIDERS.deepl.translate(['Hello'], 'de', { apiKey: 'abc' }, i, 'en');
+  await PROVIDERS.deepl.translate(['Hello'], 'de', { apiKey: 'abc' }, i, { source: 'en' });
   assert.deepEqual(i.calls[0].json, { text: ['Hello'], target_lang: 'DE', source_lang: 'EN' });
+
+  const j = fakeFetch({ translations: [{ detected_source_language: 'EN', text: '<b>Hallo</b>' }] });
+  await PROVIDERS.deepl.translate(['<b>Hello</b>'], 'de', { apiKey: 'abc' }, j, { html: true, source: 'en' });
+  assert.deepEqual(j.calls[0].json, { text: ['<b>Hello</b>'], target_lang: 'DE', source_lang: 'EN', tag_handling: 'html' });
 });
 
 test('yandex: request shape, response mapping, detection from the longest text', async () => {
@@ -117,8 +130,12 @@ test('yandex: request shape, response mapping, detection from the longest text',
   assert.equal(g.calls[0].json.targetLanguageCode, 'no');
 
   const h = fakeFetch({ translations: [{ text: 'x', detectedLanguageCode: 'nb' }] });
-  await PROVIDERS.yandex.translate(['x'], 'en', { apiKey: 'K', folderId: 'F' }, h, 'nb');
+  await PROVIDERS.yandex.translate(['x'], 'en', { apiKey: 'K', folderId: 'F' }, h, { source: 'nb' });
   assert.equal(h.calls[0].json.sourceLanguageCode, 'no');
+
+  const m = fakeFetch({ translations: [{ text: '<b>y</b>', detectedLanguageCode: 'en' }] });
+  await PROVIDERS.yandex.translate(['<b>x</b>'], 'en', { apiKey: 'K', folderId: 'F' }, m, { html: true });
+  assert.equal(m.calls[0].json.format, 'HTML');
 });
 
 test('HTTP errors become an Error with status and body excerpt', async () => {
@@ -174,6 +191,18 @@ test('translateAll skips the second round when the text is already in the Target
   const r = await translateAll('google', ['Hello there my friend', 'Hi'], 'en', { apiKey: 'K' }, fetchFn);
   assert.equal(calls, 1);
   assert.deepEqual(r, { texts: ['HELLO THERE MY FRIEND', 'Hi'], detected: 'en' });
+});
+
+test('translateAll in HTML mode passes the flag to every request and leaves punctuation to the Provider', async () => {
+  const calls = [];
+  const fetchFn = async (url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push({ format: body.format, source: body.source });
+    return { ok: true, status: 200, json: async () => ({ data: { translations: body.q.map((s) => ({ translatedText: s.replace('Hello,', 'Bok'), detectedSourceLanguage: 'en' })) } }) };
+  };
+  const r = await translateAll('google', ['Hello,', '<p>Hello, again and more</p>'], 'hr', { apiKey: 'K' }, fetchFn, { html: true });
+  assert.deepEqual(calls, [{ format: 'html', source: undefined }, { format: 'html', source: 'en' }]);
+  assert.deepEqual(r, { texts: ['Bok', '<p>Bok again and more</p>'], detected: 'en' }); // text mode would have made it 'Bok,'
 });
 
 test('translateAll rejects when a provider returns fewer translations than requested', async () => {
