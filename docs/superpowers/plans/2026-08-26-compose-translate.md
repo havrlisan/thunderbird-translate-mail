@@ -17,7 +17,7 @@
 - All user-visible strings go through `_locales/en/messages.json` (`messenger.i18n.getMessage`). No hard-coded UI text in JS/HTML.
 - Use the `messenger` global in extension code; the content script alone uses `globalThis.messenger ?? globalThis.browser`.
 - Vocabulary from `CONTEXT.md`: Provider, Target Language, Source Language, Translation, Original.
-- Markup is never sent to a Provider — only trimmed text-node strings.
+- Reading side: markup is never sent to a Provider — only trimmed text-node strings. Compose side (since Task 5e): each run of the reply goes as its own HTML in the Provider's HTML mode, with quoted blocks and signatures lifted out; the returned HTML is sanitized before insertion.
 - Quoted text and signatures are **always** skipped on the compose side (`skipQuoted: true`); the subject is never touched; no cache on the compose side.
 - Commit after every task; **never push**. Commit messages: short subject, trailer
   `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` and
@@ -1212,6 +1212,373 @@ Reload the temporary add-on, reply to the example message again (HTML and plain 
 
 ---
 
+### Task 5e: Compose side sends the reply as HTML (Provider HTML mode) — sentence context with formatting kept
+
+After Task 5d, `<b>bold</b>` still came back as *podebljano* (neutral form): the sentence was split by inline formatting into three items, so the word had no sentence around it. Luka chose Provider HTML mode with the reply's own markup (spec sections "Translating the draft", "`content.js`", "Translation quality"). Each run of reply text now goes to the Provider as one HTML item (split only at line/block boundaries when oversized), comes back as HTML, is sanitized, and is inserted with `insertHTML` as before. Quoted blocks and signatures inside a sent range are lifted out behind empty placeholders and put back afterwards. The reading side is unchanged (text mode).
+
+**Files:**
+- Modify: `src/providers.js`, `test/providers.test.js`
+- Rewrite: `src/content.js` (full file below)
+- Modify: `src/background.js` (`import`, `composeState`, `composeTranslate`)
+
+**Interfaces:**
+- `PROVIDERS[id].translate(texts, target, creds, fetchFn, { source, html } = {})` — the 5th argument becomes an options object. `html: true` → DeepL `tag_handling: 'html'`, Google `format: 'html'` (and no entity decoding of the result), Microsoft `&textType=html`, Yandex `format: 'HTML'`.
+- `translateAll(providerId, texts, target, creds, fetchFn = fetch, { html = false } = {})` — passes `html` to every request; `keepEnding` applies in text mode only.
+- Content protocol: `{ cmd: 'composeCollect', max }` → `{ selection, texts }` where `texts` are HTML strings (one or more per Range); `{ cmd: 'composeInsert', texts }` → `{ inserted }` with `texts` the translated HTML strings in the same order.
+
+- [ ] **Step 1: Failing tests — `providers.js`**
+
+In `test/providers.test.js`:
+
+The four `source` calls added in Task 5d now pass an options object — change exactly these four call sites:
+- google: `…, g, 'nb');` → `…, g, { source: 'nb' });`
+- microsoft: `…, h, 'sr');` → `…, h, { source: 'sr' });`
+- deepl: `…, i, 'en');` → `…, i, { source: 'en' });`
+- yandex: `…, h, 'nb');` → `…, h, { source: 'nb' });`
+
+Append to the end of the `google: HTML entities are decoded and nb maps to no` test:
+
+```js
+  const k = fakeFetch({ data: { translations: [{ translatedText: '<b>y</b> &amp; z', detectedSourceLanguage: 'de' }] } });
+  const rh = await PROVIDERS.google.translate(['<b>x</b> &amp; z'], 'en', { apiKey: 'K' }, k, { html: true });
+  assert.equal(k.calls[0].json.format, 'html');
+  assert.deepEqual(rh.texts, ['<b>y</b> &amp; z']); // HTML mode: the markup comes back as is, no entity decoding
+```
+
+Append to the end of the `microsoft: …` test:
+
+```js
+  const m = fakeFetch([{ translations: [{ text: '<b>y</b>', to: 'en' }] }]);
+  await PROVIDERS.microsoft.translate(['<b>x</b>'], 'en', { apiKey: 'K', region: 'westeurope' }, m, { html: true });
+  assert.equal(m.calls[0].url, 'https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=en&textType=html');
+```
+
+Append to the end of the `deepl: …` test:
+
+```js
+  const j = fakeFetch({ translations: [{ detected_source_language: 'EN', text: '<b>Hallo</b>' }] });
+  await PROVIDERS.deepl.translate(['<b>Hello</b>'], 'de', { apiKey: 'abc' }, j, { html: true, source: 'en' });
+  assert.deepEqual(j.calls[0].json, { text: ['<b>Hello</b>'], target_lang: 'DE', source_lang: 'EN', tag_handling: 'html' });
+```
+
+Append to the end of the `yandex: …` test:
+
+```js
+  const m = fakeFetch({ translations: [{ text: '<b>y</b>', detectedLanguageCode: 'en' }] });
+  await PROVIDERS.yandex.translate(['<b>x</b>'], 'en', { apiKey: 'K', folderId: 'F' }, m, { html: true });
+  assert.equal(m.calls[0].json.format, 'HTML');
+```
+
+Append a new test after `translateAll skips the second round …`:
+
+```js
+test('translateAll in HTML mode passes the flag to every request and leaves punctuation to the Provider', async () => {
+  const calls = [];
+  const fetchFn = async (url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push({ format: body.format, source: body.source });
+    return { ok: true, status: 200, json: async () => ({ data: { translations: body.q.map((s) => ({ translatedText: s.replace('Hello,', 'Bok'), detectedSourceLanguage: 'en' })) } }) };
+  };
+  const r = await translateAll('google', ['Hello,', '<p>Hello, again and more</p>'], 'hr', { apiKey: 'K' }, fetchFn, { html: true });
+  assert.deepEqual(calls, [{ format: 'html', source: undefined }, { format: 'html', source: 'en' }]);
+  assert.deepEqual(r, { texts: ['Bok', '<p>Bok again and more</p>'], detected: 'en' }); // text mode would have made it 'Bok,'
+});
+```
+
+Run: `npm test` → the four changed `source` call sites FAIL (the string `'nb'` is no longer read as an object — `source` is not set), the HTML assertions FAIL, the new test FAILS; everything else passes.
+
+- [ ] **Step 2: `providers.js`**
+
+google — signature and body:
+```js
+    async translate(texts, target, creds, fetchFn, { source, html } = {}) {
+      const url = `https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(creds.apiKey)}`;
+      const body = { q: texts, target: GOOGLE_TARGET[target] ?? target, format: html ? 'html' : 'text' };
+      if (source) body.source = GOOGLE_TARGET[source] ?? source;
+      const data = await postJson(fetchFn, url, {}, body);
+      const t = data.data.translations;
+      return { texts: t.map((x) => (html ? x.translatedText : decodeEntities(x.translatedText))), detected: t[longestIndex(texts)]?.detectedSourceLanguage };
+    },
+```
+
+microsoft — signature and URL:
+```js
+    async translate(texts, target, creds, fetchFn, { source, html } = {}) {
+      const from = source ? `&from=${encodeURIComponent(MICROSOFT_TARGET[source] ?? source)}` : '';
+      const type = html ? '&textType=html' : '';
+      const url = `https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=${encodeURIComponent(MICROSOFT_TARGET[target] ?? target)}${from}${type}`;
+```
+(the rest of the function unchanged)
+
+deepl — signature `async translate(texts, target, creds, fetchFn, { source, html } = {}) {`; after the `source_lang` line add:
+```js
+      if (html) body.tag_handling = 'html';
+```
+
+yandex — signature `async translate(texts, target, creds, fetchFn, { source, html } = {}) {`; after the `sourceLanguageCode` line add:
+```js
+      if (html) body.format = 'HTML'; // per Yandex's API reference (PLAIN_TEXT is the default); unverified live, like the rest of Yandex
+```
+
+Update the `decodeEntities` comment to: `// Google v2 escapes HTML entities in text mode (format=text); in HTML mode the markup comes back as is.`
+
+`keepEnding` comment: change the first line to `// Text mode only (HTML mode sends whole sentences): DeepL drops the trailing punctuation of short fragments`.
+
+`translateAll` — signature and the three places that call `translate` / map the result:
+```js
+export async function translateAll(providerId, texts, target, creds, fetchFn = fetch, { html = false } = {}) {
+  const provider = PROVIDERS[providerId];
+  if (!texts.length) return { texts: [], detected: '' };
+  const best = longestIndex(texts);
+  const first = checked(await provider.translate([texts[best]], target, creds, fetchFn, { html }), [texts[best]]);
+  const detected = code(first.detected);
+  const out = texts.slice();
+  out[best] = first.texts[0];
+  if (detected !== target) {
+    const rest = texts.map((_, i) => i).filter((i) => i !== best);
+    let k = 0;
+    for (const part of chunk(rest.map((i) => texts[i]))) {
+      const r = checked(await provider.translate(part, target, creds, fetchFn, { source: detected || undefined, html }), part);
+      for (const t of r.texts) out[rest[k++]] = t;
+    }
+  }
+  return { texts: out.map((t, i) => (html ? t : keepEnding(texts[i], t))), detected };
+}
+```
+
+Run: `npm test` → all pass (32 tests).
+
+- [ ] **Step 3: Rewrite `src/content.js`**
+
+Replace the whole file with:
+
+```js
+// Injected into the displayed message or the compose editor (after src/text.js) by background.js.
+// Guarded so repeated injection into the same document is a no-op.
+if (!globalThis.__translateMail) {
+  globalThis.__translateMail = true;
+  const api = globalThis.messenger ?? globalThis.browser; // content scripts: be safe about which global exists
+  const { splitWhitespace, shouldTranslate, unwrap, SKIP_TAGS, SKIP_SELECTOR } = globalThis.TM_TEXT;
+
+  // Text nodes worth translating, in document order — within `range` when given.
+  function walk(skipQuoted, range) {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) =>
+        !SKIP_TAGS.has(n.parentNode?.nodeName) && (!range || range.intersectsNode(n)) && shouldTranslate(n.nodeValue) &&
+        !(skipQuoted && n.parentElement?.closest(SKIP_SELECTOR))
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT,
+    });
+    const out = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) out.push(n);
+    return out;
+  }
+
+  // --- Message display: rewrite text nodes in place; toggling restores the Original. ---
+
+  let nodes = [];          // text nodes in document order
+  let originals = [];      // their Original nodeValue
+  let translation = null;  // last applied { subject, texts, note }
+  let settingsKey = null;  // provider|target|quoted the translation was made with
+  let shown = false;
+  let headerEl = null;     // prepended block: translated subject + "Translated: X → Y" note
+
+  function collect(skipQuoted) {
+    nodes = walk(skipQuoted);
+    originals = nodes.map((n) => n.nodeValue);
+    return originals.map((s) => unwrap(splitWhitespace(s)[1]));
+  }
+
+  function line(text, style) {
+    return Object.assign(document.createElement('div'), { textContent: text, style });
+  }
+
+  function apply({ subject, texts, note }) {
+    nodes.forEach((n, i) => {
+      const [lead, , trail] = splitWhitespace(originals[i]);
+      n.nodeValue = lead + (texts[i] ?? splitWhitespace(originals[i])[1]) + trail;
+    });
+    if (!headerEl) {
+      headerEl = line('', 'margin:0 0 1em;padding:0 0 .5em;border-bottom:1px solid currentColor');
+      if (subject) headerEl.append(line(api.i18n.getMessage('subjectLine', subject), 'font-weight:bold'));
+      if (note) headerEl.append(line(note, 'opacity:.7;font-size:.9em'));
+    }
+    document.body.prepend(headerEl);
+    shown = true;
+  }
+
+  function restore() {
+    nodes.forEach((n, i) => { n.nodeValue = originals[i]; });
+    headerEl?.remove();
+    shown = false;
+  }
+
+  // --- Compose editor: each run of reply text goes to the Provider as HTML (so sentences keep their inline
+  // formatting and their context) and comes back as HTML, written through execCommand so one Ctrl+Z reverts a
+  // run and Ctrl+Y re-applies it. ---
+
+  let ranges = [];   // one Range per run (or the selection)
+  let counts = [];   // per Range: how many HTML items it was split into
+  let kept = [];     // subtrees lifted out of the sent HTML (quote block, signature), by placeholder id
+  let keptSpan = []; // per Range: [first, end) of its ids in `kept`
+
+  // Where an oversized run may be split: only between lines / blocks, never inside a sentence.
+  const BREAK = 'br, div, p, ul, ol, table, pre, hr, h1, h2, h3, h4, h5, h6, blockquote';
+
+  const outer = (node) => { const div = document.createElement('div'); div.append(node); return div.innerHTML; };
+
+  // The selection when there is one (quoted text counts then: it was picked on purpose); otherwise one Range per
+  // run of body children holding reply text — a child with text but nothing to translate (quote block, signature)
+  // ends a run, children without text (<br>) are neutral.
+  function composeRanges() {
+    const sel = window.getSelection();
+    if (sel.rangeCount && !sel.isCollapsed) return { selection: true, ranges: [sel.getRangeAt(0)] };
+    const root = document.body;
+    const childOf = (n) => { while (n.parentNode !== root) n = n.parentNode; return n; };
+    const withText = new Set(walk(true).map(childOf));
+    const out = [];
+    let run = null;
+    for (const child of root.childNodes) {
+      if (withText.has(child)) {
+        if (!run) { run = document.createRange(); run.setStartBefore(child); out.push(run); }
+        run.setEndAfter(child);
+      } else if (child.textContent.trim()) {
+        run = null;
+      }
+    }
+    return { selection: false, ranges: out };
+  }
+
+  // HTML items for one Range: its cloned contents, skipped subtrees replaced by empty placeholders, split only at
+  // line / block boundaries once an item exceeds `max` characters (a single oversized block goes alone).
+  function items(r, skipQuoted, max) {
+    const frag = r.cloneContents();
+    if (skipQuoted) {
+      for (const el of frag.querySelectorAll(SKIP_SELECTOR)) {
+        if (el.parentElement?.closest(SKIP_SELECTOR)) continue; // nested inside a subtree already lifted
+        const ph = document.createElement('span');
+        ph.dataset.tm = String(kept.push(el) - 1);
+        el.replaceWith(ph);
+      }
+    }
+    const out = [];
+    let cur = '';
+    for (const child of [...frag.childNodes]) {
+      const html = outer(child);
+      if (cur && cur.length + html.length > max && child.nodeType === 1 && child.matches(BREAK)) { out.push(cur); cur = ''; }
+      cur += html;
+    }
+    if (cur) out.push(cur);
+    return out;
+  }
+
+  function composeCollect(max) {
+    const found = composeRanges();
+    const skipQuoted = !found.selection;
+    kept = [];
+    keptSpan = [];
+    ranges = found.ranges.filter((r) => walk(skipQuoted, r).length);
+    const texts = [];
+    counts = ranges.map((r) => {
+      const from = kept.length;
+      const it = items(r, skipQuoted, max);
+      keptSpan.push([from, kept.length]);
+      texts.push(...it);
+      return it.length;
+    });
+    return { selection: found.selection, texts };
+  }
+
+  // Provider HTML back into the draft. Only the markup we sent can come back, but be strict anyway: no scripts,
+  // no event handlers, no javascript: links. Lifted subtrees return in place of their placeholders (`used` collects
+  // the ids seen, so a placeholder the Provider dropped can be appended by the caller).
+  function clean(html, used) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    for (const el of doc.querySelectorAll('script, style, iframe, object, embed, link, meta')) el.remove();
+    for (const el of doc.body.querySelectorAll('*')) {
+      for (const a of [...el.attributes]) {
+        if (/^on/i.test(a.name) || (/^(href|src|action|formaction)$/i.test(a.name) && /^\s*javascript:/i.test(a.value))) el.removeAttribute(a.name);
+      }
+    }
+    for (const ph of doc.body.querySelectorAll('span[data-tm]')) {
+      const id = Number(ph.dataset.tm);
+      used.add(id);
+      ph.replaceWith(kept[id] ?? '');
+    }
+    return doc.body.innerHTML;
+  }
+
+  function composeInsert(texts) {
+    if (texts.length !== counts.reduce((a, b) => a + b, 0)) return { inserted: false };
+    const sel = window.getSelection();
+    let i = 0;
+    for (const [k, r] of ranges.entries()) {
+      const used = new Set();
+      let html = texts.slice(i, i + counts[k]).map((t) => clean(t, used)).join('');
+      i += counts[k];
+      const [from, end] = keptSpan[k];
+      for (let id = from; id < end; id++) if (!used.has(id)) html += outer(kept[id]);
+      sel.removeAllRanges();
+      sel.addRange(r);
+      if (!document.execCommand('insertHTML', false, html)) return { inserted: false };
+    }
+    return { inserted: true };
+  }
+
+  api.runtime.onMessage.addListener((msg) => {
+    switch (msg.cmd) {
+      case 'apply':
+        translation = { subject: msg.subject, texts: msg.texts, note: msg.note };
+        settingsKey = msg.settingsKey;
+        apply(translation);
+        return Promise.resolve({ shown: true });
+      case 'toggle':
+        if (shown) { restore(); return Promise.resolve({ shown: false }); }
+        if (translation && settingsKey === msg.settingsKey) { apply(translation); return Promise.resolve({ shown: true }); }
+        return Promise.resolve({ shown: false, texts: collect(msg.skipQuoted) });
+      case 'composeCollect':
+        return Promise.resolve(composeCollect(msg.max ?? 10000));
+      case 'composeInsert':
+        return Promise.resolve(composeInsert(msg.texts));
+      default:
+        return undefined;
+    }
+  });
+}
+```
+
+No unit test (DOM); Step 6 covers it.
+
+- [ ] **Step 4: Background**
+
+In `src/background.js`:
+- First line: `import { PROVIDERS, translateAll, errorKey, LIMITS } from './providers.js';`
+- In `composeState`, the `composeCollect` message becomes `{ cmd: 'composeCollect', max: LIMITS.maxChars }`.
+- In `composeTranslate`: the `composeCollect` message becomes `{ cmd: 'composeCollect', max: LIMITS.maxChars }`, and the `translateAll` call becomes `const r = await translateAll(provider, texts, lang, s.creds, fetch, { html: true });`.
+- In the comment above `composeTranslate`, replace the first sentence with: `// Translate the selection, or the whole draft with quoted text and signature excluded, into \`lang\`. Each run goes as HTML so sentences keep their inline formatting and their context.`
+
+- [ ] **Step 5: Checks and commit**
+
+Run: `node --check src/providers.js && node --check src/content.js && node --check src/background.js && npm test`
+Expected: no syntax errors; 32/32, output pristine.
+
+```bash
+git add src/providers.js test/providers.test.js src/content.js src/background.js
+git commit -m "Compose: send each run as HTML in the Provider's HTML mode, sanitize the result; quotes and signatures lifted out behind placeholders"
+```
+
+- [ ] **Step 6: STOP — human check (Luka)**
+
+Reload the temporary add-on. In a compose window:
+1. **HTML reply** to the example message → *bold* now agrees with its sentence (e.g. *podebljani dio teksta*), `Pozdrav,` keeps the comma, the link is a link, bold is bold; quote / `On … wrote:` / signature untouched. Ctrl+Z → one step back; Ctrl+Y → again.
+2. **Plain-text reply** → same; the literal `<b>bold</b>` text stays literal; `>` quoted lines untouched.
+3. **Selection** mid-sentence → only that part; Ctrl+Z reverts.
+4. **Selection spanning into the quote** → the selected quote text is translated too, its markup intact.
+5. **Long reply** (paste ~12 000 characters of paragraphs) → translates; note in the add-on console's network tab that items were split at paragraph boundaries; one Ctrl+Z still reverts the run.
+6. **Send** a translated HTML reply and a plain-text one to yourself → formatting / line breaks / quote intact in the received mail.
+
+---
+
 ### Task 6: Docs, roadmap, version, package
 
 **Files:**
@@ -1223,7 +1590,7 @@ Reload the temporary add-on, reply to the example message again (HTML and plain 
 After the paragraph starting "The button is also bound to **Ctrl+Shift+X**", insert:
 
 ```markdown
-In a compose window, the **Translate reply** button translates what you wrote into the language of the message you are answering (preselected when you translated that message; pick any language otherwise). Select some text first to translate only that. Bare links and e-mail addresses are never sent to the Provider. Quoted text and your signature are left alone (unless selected), the subject is not touched, and the translation is written through the editor, so **Ctrl+Z** undoes it and Ctrl+Y brings it back.
+In a compose window, the **Translate reply** button translates what you wrote into the language of the message you are answering (preselected when you translated that message; pick any language otherwise). Select some text first to translate only that. Your reply is sent with its own formatting (as HTML), so bold text and links stay where they are and sentences are translated whole; quoted text and your signature are never sent unless you selected them. Bare links and e-mail addresses on their own are skipped. Quoted text and your signature are left alone (unless selected), the subject is not touched, and the translation is written through the editor, so **Ctrl+Z** undoes it and Ctrl+Y brings it back.
 ```
 
 Change the first sentence of the README from "…adds a **Translate** button to the message header toolbar." to "…adds a **Translate** button to the message header toolbar and a **Translate reply** button to the compose toolbar."
@@ -1274,7 +1641,8 @@ Install `translate-mail-0.3.0.xpi` via Add-ons and Themes → gear → Install A
 10. **Plain-text compose** → steps 2–4; the `>` quoted lines stay untouched.
 11. **Popup closed mid-flight** → long draft, Translate, close popup at once, reopen → `Translating…`, button disabled; the translation lands anyway.
 12. **Send** → send a translated reply to yourself, HTML and plain text → received body is the translation with its line breaks, quoted part original.
-13. **Fragments** → reply `Hello,` / `this is an example message.` / `Link: https://github.com/havrlisan` / `This is a <b>bold</b> part of the text.` (HTML) → comma and period kept, *bold* translated as an adjective, the URL untouched, status shows the right Source Language.
+13. **Fragments** → reply `Hello,` / `this is an example message.` / `Link: https://github.com/havrlisan` / `This is a <b>bold</b> part of the text.` (HTML) → comma and period kept, *bold* agrees with its sentence and is still bold, the link still a link, status shows the right Source Language.
+14. **Long reply** → paste ~12 000 characters of paragraphs → translated; one Ctrl+Z reverts the run.
 ```
 
 - [ ] **Step 6: Tests and package**
