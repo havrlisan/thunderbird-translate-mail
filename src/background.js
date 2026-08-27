@@ -149,9 +149,13 @@ async function suggestedLanguage(tabId, { cache, replyLang, target }) {
 }
 
 async function composeState(tabId) {
-  await inject(tabId);
-  const { selection } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeCollect' });
-  return { selection, suggested: await suggestedLanguage(tabId, await loadSettings()), busy: inFlight.has(tabId) };
+  const busy = inFlight.has(tabId);
+  let selection = false;
+  if (!busy) {
+    await inject(tabId);
+    ({ selection } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeCollect' }));
+  }
+  return { selection, suggested: await suggestedLanguage(tabId, await loadSettings()), busy };
 }
 
 // Translate the selection, or the whole draft with quoted text and signature excluded, into `lang`. The content
