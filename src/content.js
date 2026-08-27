@@ -66,6 +66,7 @@ if (!globalThis.__translateMail) {
   let counts = [];   // per Range: how many HTML items it was split into
   let kept = [];     // subtrees lifted out of the sent HTML (quote block, signature), by placeholder id
   let keptSpan = []; // per Range: [first, end) of its ids in `kept`
+  let before = [];   // per Range: its HTML as collected, to notice a draft edited while the Provider worked
 
   // Where an oversized run may be split: only between lines / blocks, never inside a sentence.
   const BREAK = 'br, div, p, ul, ol, table, pre, hr, h1, h2, h3, h4, h5, h6, blockquote';
@@ -123,6 +124,7 @@ if (!globalThis.__translateMail) {
     kept = [];
     keptSpan = [];
     ranges = found.ranges.filter((r) => walk(skipQuoted, r).length);
+    before = ranges.map((r) => outer(r.cloneContents()));
     const texts = [];
     counts = ranges.map((r) => {
       const from = kept.length;
@@ -139,10 +141,10 @@ if (!globalThis.__translateMail) {
   // the ids seen, so a placeholder the Provider dropped can be appended by the caller).
   function clean(html, used) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    for (const el of doc.querySelectorAll('script, style, iframe, object, embed, link, meta')) el.remove();
+    for (const el of doc.querySelectorAll('script, style, iframe, object, embed, link, meta, base')) el.remove();
     for (const el of doc.body.querySelectorAll('*')) {
       for (const a of [...el.attributes]) {
-        if (/^on/i.test(a.name) || (/^(href|src|action|formaction)$/i.test(a.name) && /^\s*javascript:/i.test(a.value))) el.removeAttribute(a.name);
+        if (/^on/i.test(a.name) || (/(^|:)(href|src|action|formaction)$/i.test(a.name) && /^\s*javascript:/i.test(a.value))) el.removeAttribute(a.name);
       }
     }
     for (const ph of doc.body.querySelectorAll('span[data-tm]')) {
@@ -158,6 +160,7 @@ if (!globalThis.__translateMail) {
     const sel = window.getSelection();
     let i = 0;
     for (const [k, r] of ranges.entries()) {
+      if (outer(r.cloneContents()) !== before[k]) return { inserted: false }; // draft changed meanwhile: refuse rather than overwrite
       const used = new Set();
       let html = texts.slice(i, i + counts[k]).map((t) => clean(t, used)).join('');
       i += counts[k];
