@@ -3,6 +3,7 @@
   "extDescription": { "message": "Translate the message you are reading into your language using Google, Microsoft, DeepL or Yandex." },
   "translate": { "message": "Translate" },
   "translateReply": { "message": "Translate reply" },
+  "translateSelection": { "message": "Translate selection" },
   "showOriginal": { "message": "Show original" },
   "translating": { "message": "Translating…" },
   "alreadyIn": { "message": "Already in $LANG$", "placeholders": { "LANG": { "content": "$1" } } },

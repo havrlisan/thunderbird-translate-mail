@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import '../src/text.js';
 
-const { splitWhitespace, shouldTranslate, SKIP_TAGS } = globalThis.TM_TEXT;
+const { splitWhitespace, shouldTranslate, SKIP_TAGS, SKIP_SELECTOR } = globalThis.TM_TEXT;
 
 test('splitWhitespace keeps leading/trailing whitespace separate from the core', () => {
   assert.deepEqual(splitWhitespace('  Hallo Welt \n'), ['  ', 'Hallo Welt', ' \n']);
@@ -46,4 +46,8 @@ test('unwrap joins hard-wrapped lines but keeps paragraphs, lists, indents and s
   assert.equal(unwrap('Ivan Horvat\nIlica 1\n10000 Zagreb'), 'Ivan Horvat\nIlica 1\n10000 Zagreb');
   assert.equal(unwrap('Order: 123\nTotal: 40 €'), 'Order: 123\nTotal: 40 €');
   assert.equal(unwrap('no newlines'), 'no newlines');
+});
+
+test('SKIP_SELECTOR covers the plain-text compose quotation span', () => {
+  assert.ok(SKIP_SELECTOR.includes('span[_moz_quote]'));
 });

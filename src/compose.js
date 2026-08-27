@@ -1,5 +1,5 @@
 // compose_action popup: one language select, one button. The background does all the work, so closing the
-// popup mid-translation cancels nothing; reopening it shows the true state.
+// popup mid-translation cancels nothing. Undo is the editor's own: Ctrl+Z reverts a translation.
 import { PROVIDERS } from './providers.js';
 import { LANGUAGES } from './languages.js';
 
@@ -14,7 +14,7 @@ for (const code of LANGUAGES) $('lang').add(new Option(name(code), code));
 
 function render(r) {
   $('go').disabled = !!r.busy;
-  $('go').textContent = t(r.shown ? 'showOriginal' : 'translate');
+  $('go').textContent = t(r.selection ? 'translateSelection' : 'translate');
   $('status').title = r.details ?? '';
   $('status').textContent =
     r.busy ? t('translating')

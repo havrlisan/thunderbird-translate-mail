@@ -21,6 +21,6 @@ globalThis.TM_TEXT = {
   // Text inside these elements is never visible prose.
   SKIP_TAGS: new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA']),
   // Quoted replies, "On … wrote:" lines, signatures and inline-forward headers (Thunderbird HTML + plain-text
-  // rendering, Gmail, Apple Mail). Skipped unless the user opts to translate quoted text too.
-  SKIP_SELECTOR: 'blockquote[type=cite], .gmail_quote, .moz-cite-prefix, .moz-signature, .moz-txt-sig, .moz-email-headers-table',
+  // rendering, Gmail, Apple Mail, plain-text compose). Skipped unless the user opts to translate quoted text too.
+  SKIP_SELECTOR: 'blockquote[type=cite], span[_moz_quote], .gmail_quote, .moz-cite-prefix, .moz-signature, .moz-txt-sig, .moz-email-headers-table',
 };
