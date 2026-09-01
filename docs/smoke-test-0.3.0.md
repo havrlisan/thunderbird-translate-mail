@@ -5,6 +5,7 @@ Install `translate-mail-0.3.0.xpi` via Add-ons and Themes → gear → Install A
 ## A. Reading side (regression)
 
 1. Translate / Show original on an HTML message and a plain-text message → as in 0.2.0, including the `Subject:` + `Translated: X → Y` block at the top.
+1b. **Cancel** → on a long message click Translate, then click again while the button reads `Cancel` → button back to `Translate`, no error popup, message untouched; Translate again → works.
 
 ## B. Compose side
 
@@ -17,7 +18,8 @@ Install `translate-mail-0.3.0.xpi` via Add-ons and Themes → gear → Install A
 8. **Bad key** → break the key in Options → Provider error text in the popup, raw response in its tooltip. Fix the key.
 9. **No Provider configured** → clear the key → Translate → Options page opens, popup says `Set up a Provider in the add-on settings first`. Restore the key.
 10. **Plain-text compose** → steps 2–4; the `>` quoted lines stay untouched.
-11. **Popup closed mid-flight** → long draft, Translate, close popup at once, reopen → `Translating…`, button disabled; the translation lands anyway.
+11. **Popup closed mid-flight** → long draft, Translate, close popup at once, reopen → `Translating…`, button reads `Cancel`; the translation lands anyway.
+11b. **Cancel** → long draft, Translate, click `Cancel` → status clears, button `Translate`, draft untouched; Translate again → works. Repeat with the popup closed and reopened mid-flight, cancelling from the reopened popup.
 12. **Send** → send a translated reply to yourself, HTML and plain text → received body is the translation with its line breaks, quoted part original.
 13. **Fragments** → reply `Hello,` / `this is an example message.` / `Link: https://github.com/havrlisan` / `This is a <b>bold</b> part of the text.` (HTML) → comma and period kept, *bold* agrees with its sentence and is still bold, the link still a link, status shows the right Source Language.
 14a. **Interleaved reply edited mid-flight** → reply text both above and below the quote, Translate, and while `Translating…` type into the lower block → the popup shows the generic error and *nothing* was written (neither block).

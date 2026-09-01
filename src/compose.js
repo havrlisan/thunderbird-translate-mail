@@ -1,5 +1,6 @@
 // compose_action popup: one language select, one button. The background does all the work, so closing the
-// popup mid-translation cancels nothing. Undo is the editor's own: Ctrl+Z reverts a translation.
+// popup mid-translation cancels nothing — the button reads Cancel until it is done, also when reopened.
+// Undo is the editor's own: Ctrl+Z reverts a translation.
 import { PROVIDERS } from './providers.js';
 import { LANGUAGES } from './languages.js';
 
@@ -12,9 +13,12 @@ const send = (msg) => messenger.runtime.sendMessage(msg).catch((e) => ({ error: 
 for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
 for (const code of LANGUAGES) $('lang').add(new Option(name(code), code));
 
+let busy = false;
+
 function render(r) {
-  $('go').disabled = !!r.busy;
-  $('go').textContent = t(r.selection ? 'translateSelection' : 'translate');
+  busy = !!r.busy;
+  $('go').disabled = false;
+  $('go').textContent = t(busy ? 'cancel' : r.selection ? 'translateSelection' : 'translate');
   $('status').title = r.details ?? '';
   $('status').textContent =
     r.busy ? t('translating')
@@ -27,8 +31,8 @@ function render(r) {
 const [tab] = await messenger.tabs.query({ active: true, currentWindow: true });
 
 $('go').addEventListener('click', async () => {
-  $('go').disabled = true;
-  $('status').textContent = t('translating');
+  if (busy) { render(await send({ cmd: 'composeCancel', tabId: tab.id })); return; }
+  render({ busy: true });
   render(await send({ cmd: 'composeTranslate', tabId: tab.id, lang: $('lang').value }));
 });
 

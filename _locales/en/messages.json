@@ -6,6 +6,7 @@
   "translateSelection": { "message": "Translate selection" },
   "showOriginal": { "message": "Show original" },
   "translating": { "message": "Translating…" },
+  "cancel": { "message": "Cancel" },
   "alreadyIn": { "message": "Already in $LANG$", "placeholders": { "LANG": { "content": "$1" } } },
   "nothingToTranslate": { "message": "Nothing to translate" },
   "setupFirst": { "message": "Set up a Provider in the add-on settings first" },

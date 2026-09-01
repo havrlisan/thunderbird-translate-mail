@@ -14,8 +14,9 @@ function languageName(code) {
 // Detected Source Language per tab, so toggling back and forth keeps the tooltip.
 const detectedByTab = new Map();
 
-// Tabs with a click already being handled; a second click would race the first.
-const inFlight = new Set();
+// Tabs with a translation in flight, by AbortController: a second click (or the popup's Cancel) aborts it.
+const inFlight = new Map();
+const abortable = (signal) => (url, init) => fetch(url, { ...init, signal });
 
 // Bumped whenever a tab shows a different message (or goes away): a click still in flight for the
 // previous message must not touch the button or the new document.
@@ -66,8 +67,9 @@ async function showError(e, provider) {
 
 messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
   const tabId = tab.id;
-  if (inFlight.has(tabId)) return;
-  inFlight.add(tabId);
+  if (inFlight.has(tabId)) { inFlight.get(tabId).abort(); return; }
+  const ctl = new AbortController();
+  inFlight.set(tabId, ctl);
   const gen = generation.get(tabId);
   const stale = () => generation.get(tabId) !== gen;
   let provider;
@@ -101,9 +103,9 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
     let hit = cache[key];
     if (hit && hit.texts.length !== state.texts.length) hit = undefined; // body renders differently now (e.g. plain text vs HTML)
     if (!hit) {
-      await setButton(tabId, t('translating'));
+      await setButton(tabId, t('cancel'), t('translating'));
       const input = subject ? [subject, ...state.texts] : state.texts;
-      const r = await translateAll(provider, input, target, c);
+      const r = await translateAll(provider, input, target, c, abortable(ctl.signal));
       hit = subject
         ? { subject: r.texts[0], texts: r.texts.slice(1), detected: r.detected }
         : { subject: '', texts: r.texts, detected: r.detected };
@@ -121,10 +123,11 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
     await messenger.tabs.sendMessage(tabId, { cmd: 'apply', subject: hit.subject, texts: hit.texts, note, settingsKey });
     await showOriginalButton(tabId, hit.detected);
   } catch (e) {
-    console.error(e);
+    const cancelled = e.name === 'AbortError';
+    if (!cancelled) console.error(e);
     if (stale()) return;
     await setButton(tabId, t('translate'));
-    await showError(e, provider);
+    if (!cancelled) await showError(e, provider);
   } finally {
     inFlight.delete(tabId);
   }
@@ -163,7 +166,8 @@ async function composeState(tabId) {
 // the editor, so Ctrl+Z reverts it. No cache: drafts change. Errors are returned, not thrown — the popup renders them.
 async function composeTranslate(tabId, lang) {
   if (inFlight.has(tabId)) return { busy: true };
-  inFlight.add(tabId);
+  const ctl = new AbortController();
+  inFlight.set(tabId, ctl);
   let provider;
   try {
     const s = await loadSettings();
@@ -175,13 +179,14 @@ async function composeTranslate(tabId, lang) {
     await inject(tabId);
     const { texts } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeCollect', max: LIMITS.maxChars });
     if (texts.length === 0) return { error: 'nothingToTranslate' };
-    const r = await translateAll(provider, texts, lang, s.creds, fetch, { html: true });
+    const r = await translateAll(provider, texts, lang, s.creds, abortable(ctl.signal), { html: true });
     if (r.detected === lang) return { alreadyIn: lang };
     const { inserted } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeInsert', texts: r.texts });
     if (!inserted) return { error: 'errorGeneric', provider };
     await messenger.storage.local.set({ replyLang: lang });
     return { from: r.detected, to: lang };
   } catch (e) {
+    if (e.name === 'AbortError') return { cancelled: true };
     console.error(e);
     return { error: errorKey(e, provider), details: e.message, provider, status: e.status };
   } finally {
@@ -192,5 +197,6 @@ async function composeTranslate(tabId, lang) {
 messenger.runtime.onMessage.addListener((msg) => {
   if (msg.cmd === 'composeState') return composeState(msg.tabId);
   if (msg.cmd === 'composeTranslate') return composeTranslate(msg.tabId, msg.lang);
+  if (msg.cmd === 'composeCancel') { inFlight.get(msg.tabId)?.abort(); return Promise.resolve({ cancelled: true }); }
   return undefined;
 });

@@ -17,9 +17,9 @@ History: the first build (2026-08-26) mirrored the reading side — a "Show orig
   - `{ from, to }` → status "Translated: <from> → <to>" (existing `translatedNote`).
   - `{ alreadyIn }` → status "Already in <language>".
   - `{ error: 'nothingToTranslate' | 'setupFirst' | <errorKey>, details, provider, status }` → status shows the i18n text (Provider name and HTTP status substituted as on the reading side), tooltip shows `details`. `setupFirst` additionally means the background opened the Options page.
-  - `{ busy: true }` → status "Translating…", button disabled.
+  - `{ busy: true }` → status "Translating…", button reads "Cancel" (sends `composeCancel`, which aborts the Provider call; the translate call then resolves `{ cancelled: true }`).
   - A `suggested` code outside `LANGUAGES` (a detected language the list lacks) is added to the select on the fly.
-- Button disabled and status "Translating…" while waiting. All work runs in the background, so the popup closing mid-flight cancels nothing. A popup reopened mid-flight shows "Translating…" with the button disabled (it does not refresh by itself; reopen it later).
+- Button reads "Cancel" and status "Translating…" while waiting; Cancel aborts the in-flight Provider requests (AbortController, one per compose tab) and leaves the draft untouched. All work runs in the background, so the popup closing mid-flight cancels nothing. A popup reopened mid-flight shows "Translating…" with the "Cancel" button (it does not refresh by itself when the translation lands; reopen it later). The reading side gets the same: its button reads "Cancel" during the Provider call and a second click aborts.
 
 ## Suggested language
 `getComposeDetails(tabId).relatedMessageId` → `messages.get(id).headerMessageId` → `cachedDetected(cache, headerMessageId)` — a pure helper in `cache.js` that returns the `detected` of any cache entry whose key starts with `<headerMessageId>|` (the reading side already stores it). Falls back to `storage.local.replyLang` (saved after each successful compose translation), then to the Target Language. No new state beyond `replyLang`.

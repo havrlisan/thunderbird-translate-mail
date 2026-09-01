@@ -240,3 +240,8 @@ test('keepEnding restores trailing punctuation the Provider dropped', () => {
   assert.equal(keepEnding('Hello', 'Pozdrav'), 'Pozdrav');
   assert.equal(keepEnding('"Hi."', 'Bok'), 'Bok');
 });
+
+test('translateAll propagates an aborted fetch unchanged (Cancel button)', async () => {
+  const fetchFn = async () => { throw new DOMException('The operation was aborted.', 'AbortError'); };
+  await assert.rejects(translateAll('google', ['Hallo', 'Welt'], 'en', { apiKey: 'K' }, fetchFn), (e) => e.name === 'AbortError');
+});
