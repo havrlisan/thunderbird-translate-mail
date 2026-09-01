@@ -19,6 +19,7 @@ function render(r) {
   busy = !!r.busy;
   $('go').disabled = false;
   $('go').textContent = t(busy ? 'cancel' : r.selection ? 'translateSelection' : 'translate');
+  $('hint').hidden = !!r.selection;
   $('status').title = r.details ?? '';
   $('status').textContent =
     r.busy ? t('translating')

@@ -6,11 +6,13 @@
   <style>
     body { width: 280px; }
     .row { display: flex; align-items: center; gap: 10px; }
+    #hint { margin: 10px 0 0; }
   </style>
 </head>
 <body>
   <label><span data-i18n="composeInto"></span><select id="lang"></select></label>
   <div class="row"><button id="go" disabled></button><span id="status" class="muted"></span></div>
+  <p id="hint" class="muted" data-i18n="selectionHint" hidden></p>
   <script src="theme.js"></script>
   <script type="module" src="compose.js"></script>
 </body>

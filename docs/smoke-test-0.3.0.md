@@ -5,13 +5,13 @@ Install `translate-mail-0.3.0.xpi` via Add-ons and Themes → gear → Install A
 ## A. Reading side (regression)
 
 1. Translate / Show original on an HTML message and a plain-text message → as in 0.2.0, including the `Subject:` + `Translated: X → Y` block at the top.
-1b. **Cancel** → on a long message click Translate, then click again while the button reads `Cancel` → button back to `Translate`, no error popup, message untouched; Translate again → works.
+1b. **Cancel** → on a long message click Translate; while it reads `Translating…` the tooltip says `click to cancel` → click again → button back to `Translate`, no error popup, message untouched; Translate again → works.
 
 ## B. Compose side
 
 2. **Reply, known language** → translate a foreign message on the reading side, Reply → **Translate reply** button → popup preselects that Source Language → Translate → your text translated in place; quoted block, `On … wrote:`, signature, bold and links untouched; nothing inserted above your text; status `Translated: X → Y`.
 3. **Undo / redo** → Ctrl+Z → everything back in one step; Ctrl+Y → translated again.
-4. **Selection** → select part of a sentence (mid-word boundaries), open the popup → button reads `Translate selection` → only that part is translated; Ctrl+Z reverts. A selection inside the quote is translated too.
+4. **Selection** → the popup shows the gray selection tip when nothing is selected; select part of a sentence (mid-word boundaries), open the popup → button reads `Translate selection`, tip gone → only that part is translated; Ctrl+Z reverts. A selection inside the quote is translated too.
 5. **New message** → language preselected to the last one used.
 6. **Already in** → draft in the picked language → `Already in <language>`, untouched.
 7. **Empty draft** → `Nothing to translate`.

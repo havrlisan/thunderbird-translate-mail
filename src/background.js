@@ -103,7 +103,7 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
     let hit = cache[key];
     if (hit && hit.texts.length !== state.texts.length) hit = undefined; // body renders differently now (e.g. plain text vs HTML)
     if (!hit) {
-      await setButton(tabId, t('cancel'), t('translating'));
+      await setButton(tabId, t('translating'), t('clickToCancel'));
       const input = subject ? [subject, ...state.texts] : state.texts;
       const r = await translateAll(provider, input, target, c, abortable(ctl.signal));
       hit = subject
