@@ -65,3 +65,12 @@ test('SAFE_URL allows mail-safe links and blocks script-bearing schemes', () => 
   for (const u of ['https://x.y', 'HTTP://x', 'mailto:a@b.c', 'cid:abc', 'tel:+1', '#top', '/rel', 'rel.html', 'data:image/png;base64,AAAA']) assert.ok(SAFE_URL.test(u), u);
   for (const u of ['javascript:alert(1)', 'JAVASCRIPT:x', 'vbscript:x', 'data:text/html,x', 'blob:abc']) assert.ok(!SAFE_URL.test(u), u);
 });
+
+test('text.js can be injected into the same document twice (background re-injects on every click)', async () => {
+  const { runInContext, createContext } = await import('node:vm');
+  const { readFileSync } = await import('node:fs');
+  const code = readFileSync(new URL('../src/text.js', import.meta.url), 'utf8');
+  const ctx = createContext({});
+  runInContext(code, ctx);
+  assert.doesNotThrow(() => runInContext(code, ctx));
+});

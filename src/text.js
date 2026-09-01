@@ -1,8 +1,7 @@
 // Classic script (no import/export): injected into the message before content.js,
 // and loaded by tests for its side effect on globalThis.
-// A bare URL or e-mail address: nothing to translate, and its length would make it the detection sample.
-const BARE_LINK = /^(?:https?:\/\/\S+|www\.\S+|[^\s@]+@[^\s@]+\.[^\s@]+)$/i;
-
+// No top-level let/const/class here: background.js re-injects this file into the same document on every
+// click, and a redeclared lexical binding is a SyntaxError that leaves that click hanging.
 globalThis.TM_TEXT = {
   // 'Hello ' -> ['', 'Hello', ' ']. Providers strip surrounding whitespace, so we
   // send the core and re-attach lead/trail when writing the translation back.
@@ -17,10 +16,11 @@ globalThis.TM_TEXT = {
   unwrap(s) {
     return s.replace(/(?<=[^\n]{40,})[ \t]*\n(?!\n|[ \t]|[-*•>]|\d+[.)])/g, ' ');
   },
-  // Only strings containing a letter — and not a bare link — are worth a Provider call.
+  // Only strings containing a letter — and not a bare link (URL or e-mail address: nothing to translate, and its
+  // length would make it the detection sample) — are worth a Provider call.
   shouldTranslate(s) {
     const core = s.trim();
-    return /\p{L}/u.test(core) && !BARE_LINK.test(core);
+    return /\p{L}/u.test(core) && !/^(?:https?:\/\/\S+|www\.\S+|[^\s@]+@[^\s@]+\.[^\s@]+)$/i.test(core);
   },
   // Text inside these elements is never visible prose.
   SKIP_TAGS: new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA']),
