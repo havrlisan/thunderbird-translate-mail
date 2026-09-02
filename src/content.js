@@ -23,15 +23,18 @@ if (!globalThis.__translateMail) {
 
   let nodes = [];          // text nodes in document order
   let originals = [];      // their Original nodeValue
+  let bounds = [];         // per node: [from, to) of the Original that is translated — a selection can start or end mid-node
   let translation = null;  // last applied { subject, texts, note }
   let settingsKey = null;  // provider|target|quoted the translation was made with
   let shown = false;
   let headerEl = null;     // prepended block: translated subject + "Translated: X → Y" note
 
   function collect(skipQuoted, range) {
-    nodes = walk(skipQuoted, range);
+    const clip = (n) => [n === range?.startContainer ? range.startOffset : 0, n === range?.endContainer ? range.endOffset : n.length];
+    nodes = walk(skipQuoted, range).filter((n) => shouldTranslate(n.nodeValue.slice(...clip(n))));
     originals = nodes.map((n) => n.nodeValue);
-    return originals.map((s) => unwrap(splitWhitespace(s)[1]));
+    bounds = nodes.map(clip);
+    return originals.map((s, i) => unwrap(splitWhitespace(s.slice(...bounds[i]))[1]));
   }
 
   function line(text, style) {
@@ -40,8 +43,9 @@ if (!globalThis.__translateMail) {
 
   function apply({ subject, texts, note }) {
     nodes.forEach((n, i) => {
-      const [lead, , trail] = splitWhitespace(originals[i]);
-      n.nodeValue = lead + (texts[i] ?? splitWhitespace(originals[i])[1]) + trail;
+      const [from, to] = bounds[i];
+      const [lead, core, trail] = splitWhitespace(originals[i].slice(from, to));
+      n.nodeValue = originals[i].slice(0, from) + lead + (texts[i] ?? core) + trail + originals[i].slice(to);
     });
     if (!headerEl && (subject || note)) {
       headerEl = line('', 'margin:0 0 1em;padding:0 0 .5em;border-bottom:1px solid currentColor');
