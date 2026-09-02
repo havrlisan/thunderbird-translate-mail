@@ -7,14 +7,18 @@
     body { max-width: 520px; }
     .row { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; }
     #fields a { display: inline-block; margin: -6px 0 14px; font-size: 12px; }
+    #usage { margin: -8px 0 14px; }
+    #usage:empty { display: none; }
   </style>
 </head>
 <body>
   <label><span data-i18n="optProvider"></span><select id="provider"></select></label>
   <div id="fields"></div>
+  <p id="usage" class="muted"></p>
   <div class="row"><button id="test" data-i18n="test"></button><span id="testStatus" class="muted"></span></div>
   <label><span data-i18n="optTarget"></span><select id="target"></select></label>
   <label class="row"><input type="checkbox" id="quoted"><span data-i18n="optQuoted"></span></label>
+  <label><span data-i18n="optWarn"></span><input type="number" id="warn" min="0" step="1000"></label>
   <div class="row"><button id="clearCache" data-i18n="clearCache"></button><span id="status" class="muted"></span></div>
   <p class="muted" data-i18n="optionsHint"></p>
   <script src="theme.js"></script>

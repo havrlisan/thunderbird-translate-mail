@@ -27,18 +27,19 @@ export function chunk(texts, { maxItems, maxChars } = LIMITS) {
   return out;
 }
 
-async function postJson(fetchFn, url, headers, body) {
-  const res = await fetchFn(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: JSON.stringify(body),
-  }).catch((e) => { throw Object.assign(e, { network: true }); }); // host unreachable, DNS, TLS…
+async function fetchJson(fetchFn, url, headers, body) {
+  const init = body === undefined
+    ? { headers }
+    : { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) };
+  const res = await fetchFn(url, init).catch((e) => { throw Object.assign(e, { network: true }); }); // host unreachable, DNS, TLS…
   if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`), { status: res.status });
   return res.json();
 }
 
 // DeepL wants regional variants for these; everything else is the upper-cased ISO code.
 const DEEPL_TARGET = { en: 'EN-US', pt: 'PT-PT' };
+const deeplHost = (apiKey) => (apiKey.endsWith(':fx') ? 'api-free.deepl.com' : 'api.deepl.com');
+const deeplAuth = (apiKey) => ({ Authorization: `DeepL-Auth-Key ${apiKey}` });
 // Microsoft rejects plain `zh`/`sr`; Google and Yandex know Norwegian as `no`.
 const MICROSOFT_TARGET = { zh: 'zh-Hans', sr: 'sr-Latn' };
 const GOOGLE_TARGET = { nb: 'no' };
@@ -57,7 +58,7 @@ export const PROVIDERS = {
       const url = `https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(creds.apiKey)}`;
       const body = { q: texts, target: GOOGLE_TARGET[target] ?? target, format: html ? 'html' : 'text' };
       if (source) body.source = GOOGLE_TARGET[source] ?? source;
-      const data = await postJson(fetchFn, url, {}, body);
+      const data = await fetchJson(fetchFn, url, {}, body);
       const t = data.data.translations;
       return { texts: t.map((x) => (html ? x.translatedText : decodeEntities(x.translatedText))), detected: t[longestIndex(texts)]?.detectedSourceLanguage };
     },
@@ -71,7 +72,7 @@ export const PROVIDERS = {
       const type = html ? '&textType=html' : '';
       const url = `https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=${encodeURIComponent(MICROSOFT_TARGET[target] ?? target)}${from}${type}`;
       const headers = { 'Ocp-Apim-Subscription-Key': creds.apiKey, 'Ocp-Apim-Subscription-Region': creds.region };
-      const data = await postJson(fetchFn, url, headers, texts.map((Text) => ({ Text })));
+      const data = await fetchJson(fetchFn, url, headers, texts.map((Text) => ({ Text })));
       return { texts: data.map((x) => x.translations[0].text), detected: data[longestIndex(texts)]?.detectedLanguage?.language };
     },
   },
@@ -80,12 +81,16 @@ export const PROVIDERS = {
     help: 'https://www.deepl.com/your-account/keys',
     fields: ['apiKey'],
     async translate(texts, target, creds, fetchFn, { source, html } = {}) {
-      const host = creds.apiKey.endsWith(':fx') ? 'api-free.deepl.com' : 'api.deepl.com';
       const body = { text: texts, target_lang: DEEPL_TARGET[target] ?? target.toUpperCase() };
       if (source) body.source_lang = source.toUpperCase(); // no regional variants on the source side
       if (html) body.tag_handling = 'html';
-      const data = await postJson(fetchFn, `https://${host}/v2/translate`, { Authorization: `DeepL-Auth-Key ${creds.apiKey}` }, body);
+      const data = await fetchJson(fetchFn, `https://${deeplHost(creds.apiKey)}/v2/translate`, deeplAuth(creds.apiKey), body);
       return { texts: data.translations.map((x) => x.text), detected: data.translations[longestIndex(texts)]?.detected_source_language?.toLowerCase() };
+    },
+    // Characters used / allowed in the current billing period. Only DeepL exposes this.
+    async usage(creds, fetchFn) {
+      const data = await fetchJson(fetchFn, `https://${deeplHost(creds.apiKey)}/v2/usage`, deeplAuth(creds.apiKey));
+      return { count: data.character_count, limit: data.character_limit };
     },
   },
   yandex: {
@@ -96,13 +101,13 @@ export const PROVIDERS = {
       const body = { folderId: creds.folderId, texts, targetLanguageCode: YANDEX_TARGET[target] ?? target };
       if (source) body.sourceLanguageCode = YANDEX_TARGET[source] ?? source;
       if (html) body.format = 'HTML'; // per Yandex's API reference (PLAIN_TEXT is the default); unverified live, like the rest of Yandex
-      const data = await postJson(fetchFn, 'https://translate.api.cloud.yandex.net/translate/v2/translate', { Authorization: `Api-Key ${creds.apiKey}` }, body);
+      const data = await fetchJson(fetchFn, 'https://translate.api.cloud.yandex.net/translate/v2/translate', { Authorization: `Api-Key ${creds.apiKey}` }, body);
       return { texts: data.translations.map((x) => x.text), detected: data.translations[longestIndex(texts)]?.detectedLanguageCode };
     },
   },
 };
 
-// i18n key explaining a failed request; `e` comes from postJson (status / network) or is anything else.
+// i18n key explaining a failed request; `e` comes from fetchJson (status / network) or is anything else.
 export function errorKey(e, providerId) {
   const status = e.status;
   return status === 401 || status === 403 ? (providerId === 'microsoft' ? 'errorAuthMicrosoft' : 'errorAuth')

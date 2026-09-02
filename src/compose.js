@@ -14,15 +14,20 @@ for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el
 for (const code of LANGUAGES) $('lang').add(new Option(name(code), code));
 
 let busy = false;
+let confirmed = false; // the last answer was "Translate N characters? Click again"
 
 function render(r) {
   busy = !!r.busy;
-  $('go').disabled = false;
+  confirmed = !!r.confirm;
+  // A big run needs a second click; lock the button briefly so a fast double-click cannot confirm by accident.
+  $('go').disabled = confirmed;
+  if (confirmed) setTimeout(() => { $('go').disabled = false; }, 500);
   $('go').textContent = t(busy ? 'cancel' : r.selection ? 'translateSelection' : 'translate');
   $('hint').hidden = !!r.selection;
   $('status').title = r.details ?? '';
   $('status').textContent =
     r.busy ? t('translating')
+    : r.confirm ? t('confirmChars', r.confirm.toLocaleString())
     : r.error ? t(r.error, [PROVIDERS[r.provider]?.name ?? '', String(r.status ?? '')])
     : r.alreadyIn ? t('alreadyIn', name(r.alreadyIn))
     : r.from ? t('translatedNote', [name(r.from), name(r.to)])
@@ -33,8 +38,9 @@ const [tab] = await messenger.tabs.query({ active: true, currentWindow: true });
 
 $('go').addEventListener('click', async () => {
   if (busy) { render(await send({ cmd: 'composeCancel', tabId: tab.id })); return; }
+  const msg = { cmd: 'composeTranslate', tabId: tab.id, lang: $('lang').value, confirmed };
   render({ busy: true });
-  render(await send({ cmd: 'composeTranslate', tabId: tab.id, lang: $('lang').value }));
+  render(await send(msg));
 });
 
 const state = await send({ cmd: 'composeState', tabId: tab.id });

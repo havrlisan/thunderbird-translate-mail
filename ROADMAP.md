@@ -6,8 +6,8 @@ Already settled elsewhere and deliberately not listed: auto-translate on open, p
 
 ## UX
 
-7. **Show DeepL usage.** `GET /v2/usage` returns `character_count` / `character_limit`; show "312 400 / 500 000 characters used this month" in Options. DeepL only — the other Providers don't expose it.
-8. **Character count while translating.** Button label `Translating… (4.2k chars)` so users get a feel for what a click costs against their quota.
+7. ~~Show DeepL usage.~~ Done in 0.5.0.
+8. ~~Character count while translating.~~ Replaced in 0.5.0 by a confirmation above a configurable character threshold (default 20 000): a running count on the button is noise for most users; the real risk is one click on a huge message eating the quota.
 9. **Localize the add-on's own UI.** `_locales` has only `en`; add `hr` and `de` at least.
 
 ## Bigger features (v2)

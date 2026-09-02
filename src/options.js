@@ -13,7 +13,26 @@ for (const code of LANGUAGES) $('target').add(new Option(names.of(code), code));
 let creds = {};
 
 function save() {
-  return messenger.storage.local.set({ provider: $('provider').value, target: $('target').value, translateQuoted: $('quoted').checked, creds });
+  return messenger.storage.local.set({
+    provider: $('provider').value, target: $('target').value, translateQuoted: $('quoted').checked,
+    warnChars: Math.max(0, parseInt($('warn').value, 10) || 0), creds,
+  });
+}
+
+// "312,400 / 500,000 characters used this month" for Providers that report it (DeepL). Refreshed on load and
+// after a successful Test; quietly blank when the key is missing or the request fails.
+async function showUsage() {
+  const id = $('provider').value;
+  const p = PROVIDERS[id];
+  const c = creds[id] ?? {};
+  $('usage').textContent = '';
+  if (!p.usage || p.fields.some((f) => !c[f])) return;
+  try {
+    const { count, limit } = await p.usage(c, fetch);
+    if ($('provider').value === id) $('usage').textContent = t('usage', [count.toLocaleString(), limit.toLocaleString()]);
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 // One input per credential field of the selected Provider; other Providers' credentials are kept.
@@ -35,9 +54,10 @@ function renderFields() {
   }), Object.assign(document.createElement('a'), { href: PROVIDERS[id].help, target: '_blank', textContent: t('getKey', PROVIDERS[id].name) }));
 }
 
-$('provider').addEventListener('change', () => { renderFields(); save(); });
+$('provider').addEventListener('change', () => { renderFields(); save(); showUsage(); });
 $('target').addEventListener('change', save);
 $('quoted').addEventListener('change', save);
+$('warn').addEventListener('change', save);
 // One billable "Hello" against the current credentials, so a wrong key is caught here rather than on the first click.
 $('test').addEventListener('click', async () => {
   const id = $('provider').value;
@@ -50,6 +70,7 @@ $('test').addEventListener('click', async () => {
   try {
     const r = await translateAll(id, ['Hello'], $('target').value, c);
     status.textContent = t('testOk', r.texts[0]);
+    showUsage();
   } catch (e) {
     status.textContent = t(errorKey(e, id), [PROVIDERS[id].name, String(e.status ?? '')]);
     status.title = e.message;
@@ -62,9 +83,11 @@ $('clearCache').addEventListener('click', async () => {
   $('status').textContent = t('cacheCleared');
 });
 
-const s = await messenger.storage.local.get({ provider: 'deepl', target: 'en', translateQuoted: false, creds: {} });
+const s = await messenger.storage.local.get({ provider: 'deepl', target: 'en', translateQuoted: false, warnChars: 20000, creds: {} });
 creds = s.creds;
 $('provider').value = PROVIDERS[s.provider] ? s.provider : 'deepl';
 $('target').value = s.target;
 $('quoted').checked = s.translateQuoted;
+$('warn').value = s.warnChars;
 renderFields();
+showUsage();

@@ -245,3 +245,18 @@ test('translateAll propagates an aborted fetch unchanged (Cancel button)', async
   const fetchFn = async () => { throw new DOMException('The operation was aborted.', 'AbortError'); };
   await assert.rejects(translateAll('google', ['Hallo', 'Welt'], 'en', { apiKey: 'K' }, fetchFn), (e) => e.name === 'AbortError');
 });
+
+test('deepl: usage reads character_count / character_limit from the free or pro host', async () => {
+  const f = fakeFetch({ character_count: 312400, character_limit: 500000 });
+  assert.deepEqual(await PROVIDERS.deepl.usage({ apiKey: 'K:fx' }, f), { count: 312400, limit: 500000 });
+  assert.equal(f.calls[0].url, 'https://api-free.deepl.com/v2/usage');
+  assert.equal(f.calls[0].init.headers.Authorization, 'DeepL-Auth-Key K:fx');
+  assert.equal(f.calls[0].init.body, undefined);
+
+  const g = fakeFetch({ character_count: 1, character_limit: 2 });
+  await PROVIDERS.deepl.usage({ apiKey: 'K' }, g);
+  assert.equal(g.calls[0].url, 'https://api.deepl.com/v2/usage');
+
+  await assert.rejects(PROVIDERS.deepl.usage({ apiKey: 'K' }, fakeFetch({ message: 'bad' }, 403)), (e) => e.status === 403);
+  assert.equal(PROVIDERS.google.usage, undefined);
+});

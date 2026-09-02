@@ -23,6 +23,10 @@ const abortable = (signal) => (url, init) => fetch(url, { ...init, signal });
 const generation = new Map();
 const bump = (tabId) => generation.set(tabId, (generation.get(tabId) ?? 0) + 1);
 
+// Tabs whose last click was answered with "Translate N characters? Click again": the next click proceeds.
+const pendingConfirm = new Set();
+const charCount = (texts) => texts.reduce((n, s) => n + s.length, 0);
+
 // label = button text, title = tooltip.
 async function setButton(tabId, label, title = label) {
   await messenger.messageDisplayAction.setLabel({ tabId, label });
@@ -33,14 +37,22 @@ function showOriginalButton(tabId, from) {
   return setButton(tabId, t('showOriginal'), t('translatedFrom', languageName(from)));
 }
 
+// Ask before a big (billable) run; the button is locked briefly so a fast double-click cannot confirm by accident.
+async function askConfirm(tabId, chars) {
+  pendingConfirm.add(tabId);
+  await setButton(tabId, t('confirmChars', chars.toLocaleString()));
+  await messenger.messageDisplayAction.disable(tabId);
+  setTimeout(() => messenger.messageDisplayAction.enable(tabId).catch(console.error), 500);
+}
+
 // Everything both click paths need. `creds` is narrowed to the selected Provider; `configured` is false when
 // no Provider is chosen or a credential field is empty.
 async function loadSettings() {
-  const { provider, target = 'en', creds = {}, cache = {}, translateQuoted = false, replyLang } =
-    await messenger.storage.local.get(['provider', 'target', 'creds', 'cache', 'translateQuoted', 'replyLang']);
+  const { provider, target = 'en', creds = {}, cache = {}, translateQuoted = false, warnChars = 20000, replyLang } =
+    await messenger.storage.local.get(['provider', 'target', 'creds', 'cache', 'translateQuoted', 'warnChars', 'replyLang']);
   const c = creds[provider] ?? {};
   const p = PROVIDERS[provider];
-  return { provider, target, creds: c, cache, translateQuoted, replyLang, configured: !!p && p.fields.every((f) => c[f]) };
+  return { provider, target, creds: c, cache, translateQuoted, warnChars, replyLang, configured: !!p && p.fields.every((f) => c[f]) };
 }
 
 // Idempotent: content.js guards against running twice in the same document.
@@ -50,6 +62,7 @@ const inject = (tabId) => messenger.scripting.executeScript({ target: { tabId },
 messenger.messageDisplay.onMessagesDisplayed.addListener((tab) => {
   bump(tab.id);
   detectedByTab.delete(tab.id);
+  pendingConfirm.delete(tab.id);
   setButton(tab.id, t('translate')).catch(console.error);
 });
 
@@ -75,8 +88,8 @@ async function translateTab(tabId, selection = false) {
   const stale = () => generation.get(tabId) !== gen;
   let provider;
   try {
-    let target, c, cache, translateQuoted, configured;
-    ({ provider, target, creds: c, cache, translateQuoted, configured } = await loadSettings());
+    let target, c, cache, translateQuoted, warnChars, configured;
+    ({ provider, target, creds: c, cache, translateQuoted, warnChars, configured } = await loadSettings());
     if (!configured) {
       await messenger.runtime.openOptionsPage();
       return;
@@ -104,8 +117,10 @@ async function translateTab(tabId, selection = false) {
     let hit = selection ? undefined : cache[key];
     if (hit && hit.texts.length !== state.texts.length) hit = undefined; // body renders differently now (e.g. plain text vs HTML)
     if (!hit) {
-      await setButton(tabId, t('translating'), t('clickToCancel'));
       const input = subject ? [subject, ...state.texts] : state.texts;
+      const chars = charCount(input);
+      if (warnChars && chars > warnChars && !pendingConfirm.delete(tabId)) { await askConfirm(tabId, chars); return; }
+      await setButton(tabId, t('translating'), t('clickToCancel'));
       const r = await translateAll(provider, input, target, c, abortable(ctl.signal));
       hit = subject
         ? { subject: r.texts[0], texts: r.texts.slice(1), detected: r.detected }
@@ -177,7 +192,7 @@ async function composeState(tabId) {
 // Translate the selection, or the whole draft with quoted text and signature excluded, into `lang`. Each run
 // goes as HTML so sentences keep their inline formatting and their context. The content script writes through
 // the editor, so Ctrl+Z reverts it. No cache: drafts change. Errors are returned, not thrown — the popup renders them.
-async function composeTranslate(tabId, lang) {
+async function composeTranslate(tabId, lang, confirmed = false) {
   if (inFlight.has(tabId)) return { busy: true };
   const ctl = new AbortController();
   inFlight.set(tabId, ctl);
@@ -192,6 +207,8 @@ async function composeTranslate(tabId, lang) {
     await inject(tabId);
     const { texts } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeCollect', max: LIMITS.maxChars });
     if (texts.length === 0) return { error: 'nothingToTranslate' };
+    const chars = charCount(texts);
+    if (s.warnChars && chars > s.warnChars && !confirmed) return { confirm: chars };
     const r = await translateAll(provider, texts, lang, s.creds, abortable(ctl.signal), { html: true });
     if (r.detected === lang) return { alreadyIn: lang };
     const { inserted } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeInsert', texts: r.texts });
@@ -209,7 +226,7 @@ async function composeTranslate(tabId, lang) {
 
 messenger.runtime.onMessage.addListener((msg) => {
   if (msg.cmd === 'composeState') return composeState(msg.tabId);
-  if (msg.cmd === 'composeTranslate') return composeTranslate(msg.tabId, msg.lang);
+  if (msg.cmd === 'composeTranslate') return composeTranslate(msg.tabId, msg.lang, msg.confirmed);
   if (msg.cmd === 'composeCancel') { inFlight.get(msg.tabId)?.abort(); return Promise.resolve({ cancelled: true }); }
   return undefined;
 });
