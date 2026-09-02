@@ -203,6 +203,9 @@ if (!globalThis.__translateMail) {
         // Selection: quoted text counts (it was picked on purpose); whatever is shown is restored first so the Original
         // is what gets collected. ponytail: one Translation per document — a second selection replaces the first.
         if (msg.selection) {
+          // Over a whole-message Translation there is nothing left to translate: the Provider returns no word alignment,
+          // so the selected words cannot be mapped back to the Original either. Leave it shown.
+          if (shown && settingsKey) return Promise.resolve({ shown: true });
           const sel = window.getSelection();
           if (!sel.rangeCount || sel.isCollapsed) return Promise.resolve({ shown: false, texts: [] });
           // Restoring rewrites nodes, and rewriting a node collapses any selection boundary inside it (DOM "replace

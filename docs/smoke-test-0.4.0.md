@@ -10,7 +10,7 @@ Install `translate-mail-0.4.0.xpi` via Add-ons and Themes → gear → Install A
 
 2. **Basic** → HTML message, select a sentence starting and ending mid-paragraph, right-click → **Translate selection** → only that part is replaced in place, no `Subject:` / `Translated:` block at the top, button reads `Show original` with `Translated from X` in the tooltip.
 3. **Show original** → click the button → the sentence is back, button `Translate`. Click again → the *whole* message is translated (not the snippet re-shown), with the header block.
-4. **Over a shown Translation** → with the whole message translated, select a passage, Translate selection → the message first reverts to the original, then only the passage is translated.
+4. **Over a shown Translation** → with the whole message translated, select a passage, Translate selection → nothing changes (it is already translated), button still `Show original`.
 5. **Second selection** → with a selection translated, translate another selection → the first reverts, the second is translated (one at a time).
 6. **Quoted text** → select inside a quoted block (`Also translate quoted text` unticked) → it is translated anyway.
 7. **Cancel** → long selection, Translate selection, click the button while `Translating…` → back to `Translate`, no error popup, message untouched.
