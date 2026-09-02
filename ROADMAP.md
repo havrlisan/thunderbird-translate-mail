@@ -25,4 +25,4 @@ Already settled elsewhere and deliberately not listed: auto-translate on open, p
 
 ## Suggested next release
 
-10 shipped in 0.3.0. Next: `_execute_compose_action` shortcut once a key is verified to fire in a compose window (Ctrl+Shift+X is taken by the reading side); then 6 or 11.
+10 shipped in 0.3.0; the compose shortcut (Ctrl+Shift+E) is on `main`, unreleased. Next: 6 or 11.

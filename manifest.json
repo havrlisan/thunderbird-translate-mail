@@ -33,6 +33,10 @@
     "_execute_message_display_action": {
       "suggested_key": { "default": "Ctrl+Shift+X" },
       "description": "__MSG_translate__"
+    },
+    "_execute_compose_action": {
+      "suggested_key": { "default": "Ctrl+Shift+E" },
+      "description": "__MSG_translateReply__"
     }
   },
   "options_ui": {
