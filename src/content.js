@@ -56,6 +56,18 @@ if (!globalThis.__translateMail) {
     shown = true;
   }
 
+  // An offset in a node's current text → the same place in its Original: unchanged outside the translated span,
+  // expanded to the span's edge inside it. Untranslated nodes map 1:1.
+  function toOriginal(node, offset, isEnd) {
+    const i = shown ? nodes.indexOf(node) : -1;
+    if (i < 0) return offset;
+    const [from, to] = bounds[i];
+    const end = node.length - (originals[i].length - to); // where the translated span ends in the current text
+    if (offset <= from) return offset;
+    if (offset >= end) return offset - node.length + originals[i].length;
+    return isEnd ? to : from;
+  }
+
   function restore() {
     nodes.forEach((n, i) => { n.nodeValue = originals[i]; });
     headerEl?.remove();
@@ -191,10 +203,17 @@ if (!globalThis.__translateMail) {
         // Selection: quoted text counts (it was picked on purpose); whatever is shown is restored first so the Original
         // is what gets collected. ponytail: one Translation per document — a second selection replaces the first.
         if (msg.selection) {
-          if (shown) restore();
           const sel = window.getSelection();
-          const range = sel.rangeCount && !sel.isCollapsed ? sel.getRangeAt(0) : null;
-          return Promise.resolve({ shown: false, texts: range ? collect(false, range) : [] });
+          if (!sel.rangeCount || sel.isCollapsed) return Promise.resolve({ shown: false, texts: [] });
+          // Restoring rewrites nodes, and rewriting a node collapses any selection boundary inside it (DOM "replace
+          // data"), so take the boundaries first — in Original coordinates, since the selection was made over the Translation.
+          const r = sel.getRangeAt(0);
+          const [sc, so, ec, eo] = [r.startContainer, toOriginal(r.startContainer, r.startOffset, false), r.endContainer, toOriginal(r.endContainer, r.endOffset, true)];
+          if (shown) restore();
+          const range = document.createRange();
+          range.setStart(sc, so);
+          range.setEnd(ec, eo);
+          return Promise.resolve({ shown: false, texts: collect(false, range) });
         }
         if (shown) { restore(); return Promise.resolve({ shown: false }); }
         if (translation && settingsKey === msg.settingsKey) { apply(translation); return Promise.resolve({ shown: true }); }
