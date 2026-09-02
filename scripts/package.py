@@ -4,6 +4,9 @@ v = json.load(open('manifest.json', encoding='utf-8'))['version']
 out = f'translate-mail-{v}.xpi'
 with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
     z.write('manifest.json')
+    # Every file under these dirs ships. ATN review flags anything the add-on does not
+    # use (0.2.0: icons/translate-tile.* was the repo logo, now logo.svg at the root).
+    # Keep non-runtime assets (logo, screenshots) out of these dirs.
     for d in ('_locales', 'icons', 'src'):
         for root, _, files in os.walk(d):
             for f in sorted(files):
