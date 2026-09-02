@@ -9,7 +9,7 @@ Thunderbird add-on (128+) that adds a **Translate** button to the message header
 | Google Cloud Translation | Google Cloud console → enable Cloud Translation API → API key | billed (500 000 chars/month free with billing enabled) |
 | Yandex Translate | Yandex Cloud console → service account API key + folder ID | trial grant only |
 
-The button is also bound to **Ctrl+Shift+X** (change it under Add-ons and Themes → gear → Manage Extension Shortcuts).
+The button is also bound to **Ctrl+Shift+X** (change it under Add-ons and Themes → gear → Manage Extension Shortcuts). To translate only part of a message, select it and pick **Translate selection** from the right-click menu: that part is replaced in place (quoted text included), the button reads Show original, and the next Translate click does the whole message again.
 
 In a compose window, the **Translate reply** button translates what you wrote into the language of the message you are answering (preselected when you translated that message; pick any language otherwise). Select some text first to translate only that. Your reply is sent with its own formatting (as HTML), so bold text and links stay where they are and sentences are translated whole. Quoted text and your signature are left alone unless you selected them. Bare links and e-mail addresses on their own are skipped. The subject is not touched, and the translation is written through the editor, so **Ctrl+Z** undoes it and Ctrl+Y brings it back. The button is bound to **Ctrl+Shift+E**.
 

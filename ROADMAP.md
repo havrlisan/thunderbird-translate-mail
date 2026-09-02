@@ -6,7 +6,6 @@ Already settled elsewhere and deliberately not listed: auto-translate on open, p
 
 ## UX
 
-6. **Translate selection only.** Context menu on selected message text → "Translate selection". Same in-place text-node mechanism, restricted to nodes intersecting the selection. Needs the `menus` permission.
 7. **Show DeepL usage.** `GET /v2/usage` returns `character_count` / `character_limit`; show "312 400 / 500 000 characters used this month" in Options. DeepL only — the other Providers don't expose it.
 8. **Character count while translating.** Button label `Translating… (4.2k chars)` so users get a feel for what a click costs against their quota.
 9. **Localize the add-on's own UI.** `_locales` has only `en`; add `hr` and `de` at least.
@@ -25,4 +24,4 @@ Already settled elsewhere and deliberately not listed: auto-translate on open, p
 
 ## Suggested next release
 
-10 shipped in 0.3.0; the compose shortcut (Ctrl+Shift+E) is on `main`, unreleased. Next: 6 or 11.
+0.4.0 (on `main`, unreleased): compose shortcut Ctrl+Shift+E, item 6 (Translate selection in the context menu). Next: 11, or 7/8 as small wins.

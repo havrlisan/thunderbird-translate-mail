@@ -65,8 +65,9 @@ async function showError(e, provider) {
   });
 }
 
-messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
-  const tabId = tab.id;
+// Button click: toggle the whole message's Translation (cached per message). Menu click (`selection`): translate
+// the text nodes under the selection in place, uncached, no subject or header; the button then reads Show original.
+async function translateTab(tabId, selection = false) {
   if (inFlight.has(tabId)) { inFlight.get(tabId).abort(); return; }
   const ctl = new AbortController();
   inFlight.set(tabId, ctl);
@@ -84,7 +85,7 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
     // The content script reuses its last Translation only if it was made with the same settings.
     const settingsKey = `${provider}|${target}|${translateQuoted}`;
     await inject(tabId);
-    const state = await messenger.tabs.sendMessage(tabId, { cmd: 'toggle', skipQuoted: !translateQuoted, settingsKey });
+    const state = await messenger.tabs.sendMessage(tabId, { cmd: 'toggle', skipQuoted: !translateQuoted, settingsKey, selection });
     if (!state.texts) {
       // Toggled an existing Translation on or off.
       if (state.shown) await showOriginalButton(tabId, detectedByTab.get(tabId) ?? '');
@@ -93,14 +94,14 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
     }
 
     const [msg] = (await messenger.messageDisplay.getDisplayedMessages(tabId)).messages;
-    const subject = (msg.subject ?? '').trim();
+    const subject = selection ? '' : (msg.subject ?? '').trim();
     if (!subject && state.texts.length === 0) {
       await setButton(tabId, t('nothingToTranslate'));
       return;
     }
 
     const key = cacheKey(msg.headerMessageId, provider, target);
-    let hit = cache[key];
+    let hit = selection ? undefined : cache[key];
     if (hit && hit.texts.length !== state.texts.length) hit = undefined; // body renders differently now (e.g. plain text vs HTML)
     if (!hit) {
       await setButton(tabId, t('translating'), t('clickToCancel'));
@@ -110,7 +111,7 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
         ? { subject: r.texts[0], texts: r.texts.slice(1), detected: r.detected }
         : { subject: '', texts: r.texts, detected: r.detected };
       // ponytail: read-modify-write of the whole cache; concurrent clicks in two tabs can drop one entry. Fine for a cache.
-      await messenger.storage.local.set({ cache: cachePut(cache, key, hit, Date.now()) });
+      if (!selection) await messenger.storage.local.set({ cache: cachePut(cache, key, hit, Date.now()) });
     }
     if (stale()) return; // user moved on meanwhile; the Translation is cached for when they come back
 
@@ -119,8 +120,9 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
       await setButton(tabId, t('alreadyIn', languageName(target)));
       return;
     }
-    const note = t('translatedNote', [languageName(hit.detected), languageName(target)]);
-    await messenger.tabs.sendMessage(tabId, { cmd: 'apply', subject: hit.subject, texts: hit.texts, note, settingsKey });
+    const note = selection ? '' : t('translatedNote', [languageName(hit.detected), languageName(target)]);
+    // A selection Translation carries no settingsKey: the next Translate click must do the whole message, not re-show it.
+    await messenger.tabs.sendMessage(tabId, { cmd: 'apply', subject: hit.subject, texts: hit.texts, note, settingsKey: selection ? null : settingsKey });
     await showOriginalButton(tabId, hit.detected);
   } catch (e) {
     const cancelled = e.name === 'AbortError';
@@ -131,6 +133,17 @@ messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
   } finally {
     inFlight.delete(tabId);
   }
+}
+
+messenger.messageDisplayAction.onClicked.addListener((tab) => translateTab(tab.id));
+
+// "Translate selection" in the context menu of selected text. Thunderbird shows a `selection` item wherever text is
+// selected, the compose editor included: there it opens the Translate reply popup, which handles selections itself.
+messenger.menus.create({ id: 'translate-selection', title: t('translateSelection'), contexts: ['selection'] }, () => void messenger.runtime.lastError);
+messenger.menus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId !== 'translate-selection') return;
+  if (tab.type === 'messageCompose') messenger.composeAction.openPopup({ windowId: tab.windowId }).catch(console.error);
+  else translateTab(tab.id, true).catch(console.error);
 });
 
 // --- Compose side: the popup (src/compose.js) drives these over runtime.sendMessage. ---

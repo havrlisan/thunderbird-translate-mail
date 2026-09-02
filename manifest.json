@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "__MSG_extName__",
   "description": "__MSG_extDescription__",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": "Luka Havrlisan",
   "default_locale": "en",
   "icons": {
@@ -42,7 +42,7 @@
   "options_ui": {
     "page": "src/options.html"
   },
-  "permissions": ["messagesRead", "scripting", "storage", "compose"],
+  "permissions": ["messagesRead", "scripting", "storage", "compose", "menus"],
   "host_permissions": [
     "https://translation.googleapis.com/*",
     "https://api.cognitive.microsofttranslator.com/*",

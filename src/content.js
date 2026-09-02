@@ -28,8 +28,8 @@ if (!globalThis.__translateMail) {
   let shown = false;
   let headerEl = null;     // prepended block: translated subject + "Translated: X → Y" note
 
-  function collect(skipQuoted) {
-    nodes = walk(skipQuoted);
+  function collect(skipQuoted, range) {
+    nodes = walk(skipQuoted, range);
     originals = nodes.map((n) => n.nodeValue);
     return originals.map((s) => unwrap(splitWhitespace(s)[1]));
   }
@@ -43,18 +43,19 @@ if (!globalThis.__translateMail) {
       const [lead, , trail] = splitWhitespace(originals[i]);
       n.nodeValue = lead + (texts[i] ?? splitWhitespace(originals[i])[1]) + trail;
     });
-    if (!headerEl) {
+    if (!headerEl && (subject || note)) {
       headerEl = line('', 'margin:0 0 1em;padding:0 0 .5em;border-bottom:1px solid currentColor');
       if (subject) headerEl.append(line(api.i18n.getMessage('subjectLine', subject), 'font-weight:bold'));
       if (note) headerEl.append(line(note, 'opacity:.7;font-size:.9em'));
     }
-    document.body.prepend(headerEl);
+    if (headerEl) document.body.prepend(headerEl);
     shown = true;
   }
 
   function restore() {
     nodes.forEach((n, i) => { n.nodeValue = originals[i]; });
     headerEl?.remove();
+    headerEl = null; // the next Translation may have a different subject / note, or none
     shown = false;
   }
 
@@ -182,10 +183,19 @@ if (!globalThis.__translateMail) {
         settingsKey = msg.settingsKey;
         apply(translation);
         return Promise.resolve({ shown: true });
-      case 'toggle':
+      case 'toggle': {
+        // Selection: quoted text counts (it was picked on purpose); whatever is shown is restored first so the Original
+        // is what gets collected. ponytail: one Translation per document — a second selection replaces the first.
+        if (msg.selection) {
+          if (shown) restore();
+          const sel = window.getSelection();
+          const range = sel.rangeCount && !sel.isCollapsed ? sel.getRangeAt(0) : null;
+          return Promise.resolve({ shown: false, texts: range ? collect(false, range) : [] });
+        }
         if (shown) { restore(); return Promise.resolve({ shown: false }); }
         if (translation && settingsKey === msg.settingsKey) { apply(translation); return Promise.resolve({ shown: true }); }
         return Promise.resolve({ shown: false, texts: collect(msg.skipQuoted) });
+      }
       case 'composeCollect':
         return Promise.resolve(composeCollect(msg.max ?? 10000)); // fallback = LIMITS.maxChars in providers.js
       case 'composeInsert':
