@@ -58,11 +58,11 @@ messenger.windows.onRemoved.addListener((id) => { confirms.get(id)?.(false); con
 // Everything both click paths need. `creds` is narrowed to the selected Provider; `configured` is false when
 // no Provider is chosen or a credential field is empty.
 async function loadSettings() {
-  const { provider, target = 'en', creds = {}, cache = {}, translateQuoted = false, warnChars = 20000, replyLang } =
-    await messenger.storage.local.get(['provider', 'target', 'creds', 'cache', 'translateQuoted', 'warnChars', 'replyLang']);
+  const { provider, target = 'en', creds = {}, cache = {}, translateQuoted = false, warnChars = 20000, replyLang, replyFormality = '' } =
+    await messenger.storage.local.get(['provider', 'target', 'creds', 'cache', 'translateQuoted', 'warnChars', 'replyLang', 'replyFormality']);
   const c = creds[provider] ?? {};
   const p = PROVIDERS[provider];
-  return { provider, target, creds: c, cache, translateQuoted, warnChars, replyLang, configured: !!p && p.fields.every((f) => c[f]) };
+  return { provider, target, creds: c, cache, translateQuoted, warnChars, replyLang, replyFormality, configured: !!p && p.fields.every((f) => c[f]), formality: !!p?.formality };
 }
 
 // Idempotent: content.js guards against running twice in the same document.
@@ -118,7 +118,7 @@ async function translateTab(tabId, selection = false) {
       return;
     }
 
-    const key = cacheKey(msg.headerMessageId, provider, target);
+    const key = cacheKey(msg.headerMessageId || `id:${msg.id}`, provider, target); // no Message-ID header (rare): key on Thunderbird's id rather than collide on ''
     let hit = selection ? undefined : cache[key];
     if (hit && hit.texts.length !== state.texts.length) hit = undefined; // body renders differently now (e.g. plain text vs HTML)
     if (!hit) {
@@ -192,13 +192,15 @@ async function composeState(tabId) {
     await inject(tabId);
     ({ selection } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeCollect', max: LIMITS.maxChars }));
   }
-  return { selection, suggested: await suggestedLanguage(tabId, await loadSettings()), busy };
+  const s = await loadSettings();
+  // formality: null hides the popup's select (Provider without the parameter), else the last choice ('' = default).
+  return { selection, suggested: await suggestedLanguage(tabId, s), busy, formality: s.formality ? s.replyFormality : null };
 }
 
 // Translate the selection, or the whole draft with quoted text and signature excluded, into `lang`. Each run
 // goes as HTML so sentences keep their inline formatting and their context. The content script writes through
 // the editor, so Ctrl+Z reverts it. No cache: drafts change. Errors are returned, not thrown — the popup renders them.
-async function composeTranslate(tabId, lang, confirmed = false) {
+async function composeTranslate(tabId, lang, confirmed = false, formality = '') {
   if (inFlight.has(tabId)) return { busy: true };
   const ctl = new AbortController();
   inFlight.set(tabId, ctl);
@@ -215,11 +217,11 @@ async function composeTranslate(tabId, lang, confirmed = false) {
     if (texts.length === 0) return { error: 'nothingToTranslate' };
     const chars = charCount(texts);
     if (s.warnChars && chars > s.warnChars && !confirmed) return { confirm: chars };
-    const r = await translateAll(provider, texts, lang, s.creds, abortable(ctl.signal), { html: true });
+    const r = await translateAll(provider, texts, lang, s.creds, abortable(ctl.signal), { html: true, formality: formality || undefined });
     if (r.detected === lang) return { alreadyIn: lang };
     const { inserted } = await messenger.tabs.sendMessage(tabId, { cmd: 'composeInsert', texts: r.texts });
     if (!inserted) return { error: 'errorGeneric', provider };
-    await messenger.storage.local.set({ replyLang: lang });
+    await messenger.storage.local.set({ replyLang: lang, replyFormality: formality });
     return { from: r.detected, to: lang };
   } catch (e) {
     if (e.name === 'AbortError') return { cancelled: true };
@@ -232,7 +234,7 @@ async function composeTranslate(tabId, lang, confirmed = false) {
 
 messenger.runtime.onMessage.addListener((msg) => {
   if (msg.cmd === 'composeState') return composeState(msg.tabId);
-  if (msg.cmd === 'composeTranslate') return composeTranslate(msg.tabId, msg.lang, msg.confirmed);
+  if (msg.cmd === 'composeTranslate') return composeTranslate(msg.tabId, msg.lang, msg.confirmed, msg.formality);
   if (msg.cmd === 'composeCancel') { inFlight.get(msg.tabId)?.abort(); return Promise.resolve({ cancelled: true }); }
   if (msg.cmd === 'confirmed') { confirms.get(msg.windowId)?.(true); return Promise.resolve(); }
   return undefined;

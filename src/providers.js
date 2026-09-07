@@ -80,10 +80,12 @@ export const PROVIDERS = {
     name: 'DeepL',
     help: 'https://www.deepl.com/your-account/keys',
     fields: ['apiKey'],
-    async translate(texts, target, creds, fetchFn, { source, html } = {}) {
+    formality: true, // the only Provider with a formality parameter (Google v2, Microsoft v3, Yandex v2 have none)
+    async translate(texts, target, creds, fetchFn, { source, html, formality } = {}) {
       const body = { text: texts, target_lang: DEEPL_TARGET[target] ?? target.toUpperCase() };
       if (source) body.source_lang = source.toUpperCase(); // no regional variants on the source side
       if (html) body.tag_handling = 'html';
+      if (formality) body.formality = `prefer_${formality}`; // prefer_more / prefer_less: default formality where the target has none, no error
       const data = await fetchJson(fetchFn, `https://${deeplHost(creds.apiKey)}/v2/translate`, deeplAuth(creds.apiKey), body);
       return { texts: data.translations.map((x) => x.text), detected: data.translations[longestIndex(texts)]?.detected_source_language?.toLowerCase() };
     },
@@ -134,11 +136,13 @@ function checked(r, part) {
 // Detect on the longest text alone, then translate the rest with the Source Language pinned: a short fragment
 // ("bold") auto-detected on its own is a coin toss. Nothing is sent twice, and the second round is skipped when
 // the text is already in the Target Language (those texts come back unchanged).
-export async function translateAll(providerId, texts, target, creds, fetchFn = fetch, { html = false } = {}) {
+// `formality`: 'more' | 'less' | undefined — only Providers with `formality: true` act on it.
+export async function translateAll(providerId, texts, target, creds, fetchFn = fetch, { html = false, formality } = {}) {
   const provider = PROVIDERS[providerId];
   if (!texts.length) return { texts: [], detected: '' };
   const best = longestIndex(texts);
-  const first = checked(await provider.translate([texts[best]], target, creds, fetchFn, { html }), [texts[best]]);
+  const opts = { html, formality: provider.formality ? formality : undefined };
+  const first = checked(await provider.translate([texts[best]], target, creds, fetchFn, opts), [texts[best]]);
   const detected = code(first.detected);
   const out = texts.slice();
   out[best] = first.texts[0];
@@ -146,7 +150,7 @@ export async function translateAll(providerId, texts, target, creds, fetchFn = f
     const rest = texts.map((_, i) => i).filter((i) => i !== best);
     let k = 0;
     for (const part of chunk(rest.map((i) => texts[i]))) {
-      const r = checked(await provider.translate(part, target, creds, fetchFn, { source: detected || undefined, html }), part);
+      const r = checked(await provider.translate(part, target, creds, fetchFn, { ...opts, source: detected || undefined }), part);
       for (const t of r.texts) out[rest[k++]] = t;
     }
   }
