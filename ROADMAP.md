@@ -24,4 +24,4 @@ Already settled elsewhere and deliberately not listed: auto-translate on open, p
 
 ## Suggested next release
 
-0.5.0 (tagged, smoke-tested): DeepL usage in Options, a confirmation dialog above a configurable character threshold, `<pre>` blocks translated on the compose side. Next: 9 (locales) as a small win, or 11.
+0.6.0 (tagged, smoke-tested in hr): UI localized to hr, de, fr, es, it. Next: 11.
