@@ -24,4 +24,4 @@ Already settled elsewhere and deliberately not listed: auto-translate on open, p
 
 ## Suggested next release
 
-0.4.0 (on `main`, unreleased): compose shortcut Ctrl+Shift+E, item 6 (Translate selection in the context menu). Next: 11, or 7/8 as small wins.
+0.5.0 (tagged, smoke-tested): DeepL usage in Options, a confirmation dialog above a configurable character threshold, `<pre>` blocks translated on the compose side. Next: 9 (locales) as a small win, or 11.
