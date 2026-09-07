@@ -124,6 +124,15 @@ if (!globalThis.__translateMail) {
         el.replaceWith(ph);
       }
     }
+    // DeepL's HTML mode leaves <pre> untranslated (a formatted copy of plain-text mail is one <pre class="moz-quote-pre">):
+    // send it as a marked <div> with its newlines as <br>; clean() swaps it back.
+    for (const pre of frag.querySelectorAll('pre')) {
+      const div = document.createElement('div');
+      for (const a of pre.attributes) div.setAttribute(a.name, a.value);
+      div.dataset.tmPre = '';
+      div.innerHTML = pre.innerHTML.replace(/\n/g, '<br>');
+      pre.replaceWith(div);
+    }
     const out = [];
     let cur = '';
     for (const child of [...frag.childNodes]) {
@@ -164,6 +173,13 @@ if (!globalThis.__translateMail) {
         const url = /(^|:)(href|src|action|formaction)$/i.test(a.name);
         if (/^on/i.test(a.name) || (url && !SAFE_URL.test(a.value.replace(/[\t\n\r]/g, '').trim()))) el.removeAttribute(a.name);
       }
+    }
+    for (const div of doc.body.querySelectorAll('[data-tm-pre]')) {
+      const pre = doc.createElement('pre');
+      for (const a of div.attributes) if (a.name !== 'data-tm-pre') pre.setAttribute(a.name, a.value);
+      for (const br of div.querySelectorAll('br')) br.replaceWith('\n');
+      pre.append(...div.childNodes);
+      div.replaceWith(pre);
     }
     for (const ph of doc.body.querySelectorAll('span[data-tm]')) {
       const id = Number(ph.dataset.tm);

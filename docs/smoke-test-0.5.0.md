@@ -18,6 +18,7 @@ Install `translate-mail-0.5.0.xpi` via Add-ons and Themes → gear → Install A
 9. **Cached** → go back to the message from step 6 → Translate → instant, no question (cache hit costs nothing).
 10. **Selection** → select more than 500 characters → right-click → Translate selection → asks; **Translate** → translates the selection.
 11. **Compose** → reply with more than 500 characters → Translate reply → status `Translate 1,234 characters?`, buttons **Translate** and **Cancel**. Cancel → status cleared, Cancel gone. Translate reply again → asks → Translate → translated. A short reply translates without asking.
+11c. **Formatted paste** → HTML compose → copy a few paragraphs of a *plain-text* message from the reading pane, paste (with formatting) into the draft → Translate reply → translated, still monospace with the same paragraph breaks and links; Ctrl+Z restores the original.
 11b. **Error window** → break the API key → Translate a short message → the error window looks as before (title, text, details, one **Close** button).
 12. **Off** → set the threshold to 0 → long message → Translate → no question.
 13. Set the threshold back to 20000.
