@@ -1,6 +1,7 @@
 // compose_action popup: one language select, one button. The background does all the work, so closing the
 // popup mid-translation cancels nothing — the button reads Cancel until it is done, also when reopened.
-// Undo is the editor's own: Ctrl+Z reverts a translation.
+// Undo is the editor's own: Ctrl+Z reverts a translation. The tone select shows only for Providers with a
+// formality parameter (DeepL) and is remembered per reply like the language.
 import { PROVIDERS } from './providers.js';
 import { LANGUAGES } from './languages.js';
 
@@ -42,7 +43,7 @@ $('no').addEventListener('click', () => render({}));
 
 $('go').addEventListener('click', async () => {
   if (busy) { render(await send({ cmd: 'composeCancel', tabId: tab.id })); return; }
-  const msg = { cmd: 'composeTranslate', tabId: tab.id, lang: $('lang').value, confirmed };
+  const msg = { cmd: 'composeTranslate', tabId: tab.id, lang: $('lang').value, confirmed, formality: $('formality').value };
   render({ busy: true });
   render(await send(msg));
 });
@@ -52,4 +53,5 @@ if (state.suggested) {
   if (!LANGUAGES.includes(state.suggested)) $('lang').add(new Option(name(state.suggested), state.suggested));
   $('lang').value = state.suggested;
 }
+if (state.formality != null) { $('tone').hidden = false; $('formality').value = state.formality; }
 render(state);

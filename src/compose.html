@@ -7,10 +7,14 @@
     body { width: 280px; }
     .row { display: flex; align-items: center; gap: 10px; }
     #hint { margin: 10px 0 0; }
+    #tone[hidden] { display: none; } /* label is display:block, which would beat the hidden attribute */
   </style>
 </head>
 <body>
   <label><span data-i18n="composeInto"></span><select id="lang"></select></label>
+  <label id="tone" hidden><span data-i18n="composeFormality"></span><select id="formality">
+    <option value="" data-i18n="formalityDefault"></option><option value="more" data-i18n="formalityMore"></option><option value="less" data-i18n="formalityLess"></option>
+  </select></label>
   <div class="row"><button id="go" disabled></button><button id="no" hidden></button><span id="status" class="muted"></span></div>
   <p id="hint" class="muted" data-i18n="selectionHint" hidden></p>
   <script src="theme.js"></script>

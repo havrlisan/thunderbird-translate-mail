@@ -260,3 +260,25 @@ test('deepl: usage reads character_count / character_limit from the free or pro 
   await assert.rejects(PROVIDERS.deepl.usage({ apiKey: 'K' }, fakeFetch({ message: 'bad' }, 403)), (e) => e.status === 403);
   assert.equal(PROVIDERS.google.usage, undefined);
 });
+
+test('deepl: formality goes out as prefer_more / prefer_less (no error on targets without formality)', async () => {
+  const f = fakeFetch({ translations: [{ detected_source_language: 'EN', text: 'Hallo' }] });
+  await PROVIDERS.deepl.translate(['Hello'], 'de', { apiKey: 'abc' }, f, { formality: 'more' });
+  assert.equal(f.calls[0].json.formality, 'prefer_more');
+  const g = fakeFetch({ translations: [{ detected_source_language: 'EN', text: 'Hallo' }] });
+  await PROVIDERS.deepl.translate(['Hello'], 'de', { apiKey: 'abc' }, g);
+  assert.equal('formality' in g.calls[0].json, false);
+  assert.equal(PROVIDERS.deepl.formality, true);
+  assert.equal(PROVIDERS.google.formality, undefined);
+});
+
+test('translateAll passes formality to every DeepL request (detection round included)', async () => {
+  const bodies = [];
+  const fetchFn = async (url, init) => {
+    const b = JSON.parse(init.body);
+    bodies.push(b);
+    return { ok: true, status: 200, json: async () => ({ translations: b.text.map((s) => ({ text: s.toUpperCase(), detected_source_language: 'EN' })) }) };
+  };
+  await translateAll('deepl', ['Hi', 'Hello there'], 'de', { apiKey: 'k' }, fetchFn, { formality: 'less' });
+  assert.deepEqual(bodies.map((b) => b.formality), ['prefer_less', 'prefer_less']);
+});
