@@ -8,7 +8,7 @@ Already settled elsewhere and deliberately not listed: auto-translate on open, p
 
 7. ~~Show DeepL usage.~~ Done in 0.5.0.
 8. ~~Character count while translating.~~ Replaced in 0.5.0 by a confirmation above a configurable character threshold (default 20 000): a running count on the button is noise for most users; the real risk is one click on a huge message eating the quota.
-9. **Localize the add-on's own UI.** `_locales` has only `en`; add `hr` and `de` at least.
+9. ~~Localize the add-on's own UI.~~ Done in 0.6.0: `hr`, `de`, `fr`, `es`, `it` (fr/es/it not proofread by a native speaker).
 
 ## Bigger features (v2)
 
