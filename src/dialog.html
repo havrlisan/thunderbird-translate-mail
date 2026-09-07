@@ -6,15 +6,16 @@
   <link rel="stylesheet" href="style.css">
   <style>
     pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 90px; overflow: auto; margin: 8px 0 12px; padding: 8px; border-radius: 4px; background: var(--field-bg); color: var(--muted); }
-    button { display: block; margin-left: auto; }
+    p { margin: 0 0 12px; }
+    .buttons { display: flex; justify-content: flex-end; gap: 8px; }
   </style>
 </head>
 <body>
   <h1 id="title"></h1>
   <p id="text"></p>
   <pre id="details"></pre>
-  <button id="close"></button>
+  <div class="buttons"><button id="ok" hidden></button><button id="close"></button></div>
   <script src="theme.js"></script>
-  <script src="error.js"></script>
+  <script src="dialog.js"></script>
 </body>
 </html>

@@ -23,8 +23,6 @@ const abortable = (signal) => (url, init) => fetch(url, { ...init, signal });
 const generation = new Map();
 const bump = (tabId) => generation.set(tabId, (generation.get(tabId) ?? 0) + 1);
 
-// Tabs whose last click was answered with "Translate N characters? Click again": the next click proceeds.
-const pendingConfirm = new Set();
 const charCount = (texts) => texts.reduce((n, s) => n + s.length, 0);
 
 // label = button text, title = tooltip.
@@ -37,13 +35,25 @@ function showOriginalButton(tabId, from) {
   return setButton(tabId, t('showOriginal'), t('translatedFrom', languageName(from)));
 }
 
-// Ask before a big (billable) run; the button is locked briefly so a fast double-click cannot confirm by accident.
-async function askConfirm(tabId, chars) {
-  pendingConfirm.add(tabId);
-  await setButton(tabId, t('confirmChars', chars.toLocaleString()));
-  await messenger.messageDisplayAction.disable(tabId);
-  setTimeout(() => messenger.messageDisplayAction.enable(tabId).catch(console.error), 500);
+// Small popup window (src/dialog.html): an error, or a question when `ok` is given.
+function openDialog(params) {
+  return messenger.windows.create({
+    url: `${messenger.runtime.getURL('src/dialog.html')}?${new URLSearchParams(params)}`,
+    type: 'popup', width: 480, height: 240, allowScriptsToClose: true,
+  });
 }
+
+// Ask before a big (billable) run. Resolves true when the dialog's Translate button reports back (`confirmed`
+// below), false when the window goes away any other way; aborting (another click on the button) closes it.
+const confirms = new Map(); // dialog window id → resolve
+async function askConfirm(chars, signal) {
+  const { id } = await openDialog({ text: t('confirmChars', chars.toLocaleString()), ok: t('translate') });
+  const answer = new Promise((resolve) => confirms.set(id, resolve));
+  const close = () => messenger.windows.remove(id).catch(() => {});
+  if (signal.aborted) close(); else signal.addEventListener('abort', close);
+  return answer;
+}
+messenger.windows.onRemoved.addListener((id) => { confirms.get(id)?.(false); confirms.delete(id); });
 
 // Everything both click paths need. `creds` is narrowed to the selected Provider; `configured` is false when
 // no Provider is chosen or a credential field is empty.
@@ -62,7 +72,6 @@ const inject = (tabId) => messenger.scripting.executeScript({ target: { tabId },
 messenger.messageDisplay.onMessagesDisplayed.addListener((tab) => {
   bump(tab.id);
   detectedByTab.delete(tab.id);
-  pendingConfirm.delete(tab.id);
   setButton(tab.id, t('translate')).catch(console.error);
 });
 
@@ -71,11 +80,7 @@ messenger.tabs.onRemoved.addListener(bump);
 // Explain a failed translation in a small popup window; the button itself stays "Translate".
 async function showError(e, provider) {
   const name = PROVIDERS[provider]?.name ?? String(provider);
-  const params = new URLSearchParams({ title: t('error'), text: t(errorKey(e, provider), [name, String(e.status ?? '')]), details: e.message });
-  await messenger.windows.create({
-    url: `${messenger.runtime.getURL('src/error.html')}?${params}`,
-    type: 'popup', width: 480, height: 240, allowScriptsToClose: true,
-  });
+  await openDialog({ title: t('error'), text: t(errorKey(e, provider), [name, String(e.status ?? '')]), details: e.message });
 }
 
 // Button click: toggle the whole message's Translation (cached per message). Menu click (`selection`): translate
@@ -119,7 +124,8 @@ async function translateTab(tabId, selection = false) {
     if (!hit) {
       const input = subject ? [subject, ...state.texts] : state.texts;
       const chars = charCount(input);
-      if (warnChars && chars > warnChars && !pendingConfirm.delete(tabId)) { await askConfirm(tabId, chars); return; }
+      if (warnChars && chars > warnChars && !(await askConfirm(chars, ctl.signal))) return;
+      if (stale()) return; // answered after moving to another message
       await setButton(tabId, t('translating'), t('clickToCancel'));
       const r = await translateAll(provider, input, target, c, abortable(ctl.signal));
       hit = subject
@@ -228,5 +234,6 @@ messenger.runtime.onMessage.addListener((msg) => {
   if (msg.cmd === 'composeState') return composeState(msg.tabId);
   if (msg.cmd === 'composeTranslate') return composeTranslate(msg.tabId, msg.lang, msg.confirmed);
   if (msg.cmd === 'composeCancel') { inFlight.get(msg.tabId)?.abort(); return Promise.resolve({ cancelled: true }); }
+  if (msg.cmd === 'confirmed') { confirms.get(msg.windowId)?.(true); return Promise.resolve(); }
   return undefined;
 });

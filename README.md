@@ -17,7 +17,7 @@ Message text is sent to the selected Provider **only when you click Translate**.
 
 Quoted replies, signatures and forwarded-message headers are skipped by default — they have already been read and would eat into free-tier quota. Turn on **Also translate quoted text and signatures** in the add-on settings to include them.
 
-Translating more than 20 000 characters at once (adjustable in the add-on settings, 0 turns it off) asks first: the button reads `Translate 24,312 characters? Click again`. With DeepL, the add-on settings also show how much of this month's quota is used.
+Translating more than 20 000 characters at once (adjustable in the add-on settings, 0 turns it off) asks first (`Translate 24,312 characters?`) in a small window, or in the Translate reply popup. With DeepL, the add-on settings also show how much of this month's quota is used.
 
 Hard-wrapped lines in plain-text messages are joined before translation so sentences are not translated as fragments; lines shorter than 40 characters, indented lines and list items are left alone, so a long address or table line can occasionally be merged with the next one in the translated view (the original is never modified).
 

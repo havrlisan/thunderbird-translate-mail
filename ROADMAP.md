@@ -20,7 +20,7 @@ Already settled elsewhere and deliberately not listed: auto-translate on open, p
 - **Per-item language detection.** Bilingual mail (e.g. English body, Croatian quoted reply) currently reports one Source Language from the longest item. Pass per-item `detected` through and report "already in target" only when all items are. Demoted: mild since quoted text is skipped by default, and bilingual mail says the same thing twice; needs a real report before touching detection.
 - Cache key falls back to `msg.id` (or skips caching) when `headerMessageId` is missing, so such messages don't all collide on one key.
 - Extend `LANGUAGES` (e.g. `ca`, `fa`, `hi`, `ms`, `bn`); `Intl.DisplayNames` already names any code and Provider errors cover unsupported ones.
-- `error.html` popup → `notifications.create()` for the common "network down" case would be less intrusive, at the cost of the details text. Leave unless it annoys.
+- `dialog.html` error popup → `notifications.create()` for the common "network down" case would be less intrusive, at the cost of the details text. Leave unless it annoys.
 
 ## Suggested next release
 
