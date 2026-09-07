@@ -130,7 +130,11 @@ if (!globalThis.__translateMail) {
       const div = document.createElement('div');
       for (const a of pre.attributes) div.setAttribute(a.name, a.value);
       div.dataset.tmPre = '';
-      div.innerHTML = pre.innerHTML.replace(/\n/g, '<br>');
+      div.append(...pre.childNodes);
+      const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT);
+      const texts = [];
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.nodeValue.includes('\n')) texts.push(n);
+      for (const n of texts) n.replaceWith(...n.nodeValue.split('\n').flatMap((s, i) => (i ? [document.createElement('br'), s] : [s])));
       pre.replaceWith(div);
     }
     const out = [];
