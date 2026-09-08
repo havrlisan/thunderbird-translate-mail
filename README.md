@@ -4,9 +4,9 @@ Thunderbird add-on (128+) that translates the message you are reading into your 
 
 [Install from addons.thunderbird.net](https://addons.thunderbird.net/thunderbird/addon/translate-mail/)
 
-![A German supplier email as received, with the Translate button in the message header toolbar](images/before-translate.png)
+<img src="images/before-translate.png" width="800" alt="A German supplier email as received, with the Translate button in the message header toolbar">
 
-![The same message translated in place: subject, body, list and table are translated, the signature and quoted reply are left alone](images/after-translate.png)
+<img src="images/after-translate.png" width="800" alt="The same message translated in place: subject, body, list and table are translated, the signature and quoted reply are left alone">
 
 ## Reading
 
@@ -18,7 +18,7 @@ Thunderbird add-on (128+) that translates the message you are reading into your 
 
 ## Replying
 
-![The Translate reply popup in the compose window: pick the recipient's language and, with DeepL, a formal or informal tone](images/compose-popup.png)
+<img src="images/compose-popup.png" width="400" alt="The Translate reply popup in the compose window: pick the recipient's language and, with DeepL, a formal or informal tone">
 
 - **Translate reply** in the compose toolbar (or **Ctrl+Shift+E**) translates what you wrote into the language of the message you are answering. The language is preselected when you translated that message.
 - Select some text first to translate only that.
@@ -28,7 +28,7 @@ Thunderbird add-on (128+) that translates the message you are reading into your 
 
 ## Settings
 
-![Add-on settings: choose a provider, paste your API key, pick your language, and see how much of this month's DeepL quota is used](images/options.png)
+<img src="images/options.png" width="600" alt="Add-on settings: choose a provider, paste your API key, pick your language, and see how much of this month's DeepL quota is used">
 
 | Provider | Credentials | Free tier |
 |---|---|---|
