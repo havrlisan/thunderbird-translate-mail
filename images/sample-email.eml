@@ -1,0 +1,53 @@
+From: Anna Berger <a.berger@nordwind-technik.example>
+To: John Doe <john.doe@example.com>
+Date: Tue, 08 Sep 2026 09:42:17 +0200
+Subject: =?UTF-8?B?QVc6IEFuZ2Vib3QgTnIuIDIwMjYtMDQxNyDigJMgTGllZmVyZnJpc3RlbiwgUHJlaXNhbnBhc3N1bmcgdW5kIG9mZmVuZSBQdW5rdGU=?=
+MIME-Version: 1.0
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+<html><body style="font-family: Calibri, Arial, sans-serif; font-size: 11pt;">
+<p>Sehr geehrter Herr Doe,</p>
+
+<p>vielen Dank für Ihre schnelle Rückmeldung und die Nachfrage vom Freitag. Ich habe Ihre Anmerkungen intern mit unserer Fertigung und dem Einkauf abgestimmt und kann Ihnen nun einen aktualisierten Stand geben. Vorab: <b>Die Positionen 1 und 2 können wir wie gewünscht bis zum 30. September liefern.</b> Für die Position 3 gilt das leider nicht &ndash; dazu weiter unten mehr.</p>
+
+<p>Aufgrund der gestiegenen Rohstoffpreise im dritten Quartal mussten wir die Kalkulation noch einmal anpassen. Die neuen Konditionen finden Sie in der beigefügten Übersicht; das überarbeitete Angebot finden Sie außerdem in unserem <a href="https://portal.nordwind-technik.example/angebote/2026-0417">Kundenportal</a>. Bitte beachten Sie: Die Preise gelten <i>bis einschließlich 22. September</i>. Danach müssten wir sie erneut prüfen, was ich Ihnen nach Möglichkeit ersparen möchte.</p>
+
+<table border="1" cellpadding="6" cellspacing="0" style="border-collapse: collapse;">
+<tr style="background:#eee;"><th>Pos.</th><th>Bezeichnung</th><th>Menge</th><th>Einzelpreis</th><th>Lieferzeit</th></tr>
+<tr><td>1</td><td>Schaltschrankgehäuse IP66, verzinkt</td><td>12 Stk.</td><td>1.245,00 &euro;</td><td>2&ndash;3 Wochen</td></tr>
+<tr><td>2</td><td>Montagerahmen inkl. Erdungsset</td><td>12 Stk.</td><td>189,50 &euro;</td><td>ab Lager</td></tr>
+<tr><td>3</td><td>Sondertür mit Sichtfenster (Sonderanfertigung)</td><td>4 Stk.</td><td>2.380,00 &euro;</td><td>6&ndash;8 Wochen</td></tr>
+</table>
+
+<p>Folgende Punkte sind aus unserer Sicht noch offen:</p>
+<ol>
+<li>Die <b>Sondertür (Pos. 3)</b> wird bei unserem Zulieferer gefertigt, der derzeit mit sechs bis acht Wochen Vorlauf rechnet. Falls die Tür zeitkritisch ist, könnten wir eine Standardtür als Übergangslösung liefern und die Sondertür nachreichen &ndash; das ist allerdings nicht in Stein gemeißelt und hängt davon ab, ob Ihr Monteur die Tür vor Ort tauschen kann.</li>
+<li>Für die Zollabwicklung benötigen wir Ihre EORI-Nummer sowie die Angabe, ob die Lieferung DAP oder DDP erfolgen soll. Bei DDP übernehmen wir die Einfuhrumsatzsteuer und stellen sie Ihnen weiter in Rechnung.</li>
+<li>Die Zeichnungsfreigabe für die Bohrbilder steht noch aus. Ohne Ihre Freigabe können wir die Fertigung nicht einplanen, und jeder Tag Verzug verschiebt den Liefertermin eins zu eins nach hinten.</li>
+</ol>
+
+<p>Was die Zahlungsbedingungen betrifft: Wie besprochen bleibt es bei 30 % Anzahlung bei Auftragserteilung, der Rest ist innerhalb von 14 Tagen nach Lieferung ohne Abzug fällig. Bei Vorkasse der Gesamtsumme könnten wir Ihnen 2 % Skonto einräumen.</p>
+
+<p>Falls Sie die Details lieber in einem kurzen Gespräch klären möchten, erreichen Sie mich morgen zwischen 9 und 12 Uhr unter der unten stehenden Nummer. Ansonsten schicken Sie die Freigabe bitte direkt an unsere Auftragsabwicklung:</p>
+<p>auftrag@nordwind-technik.example<br>
+https://portal.nordwind-technik.example/freigabe</p>
+
+<p>Ich freue mich auf Ihre Rückmeldung.</p>
+<p>Mit freundlichen Grüßen</p>
+
+<div class="moz-signature">-- <br>
+<b>Anna Berger</b><br>
+Vertriebsinnendienst | Nordwind Technik GmbH<br>
+Musterstraße 12, 12345 Musterstadt<br>
+Tel. +49 123 4567890<br>
+www.nordwind-technik.example</div>
+
+<br>
+<div class="moz-cite-prefix">Am 04.09.2026 um 16:21 schrieb John Doe:</div>
+<blockquote type="cite" style="border-left: 2px solid #888; margin: 0; padding-left: 8px; color: #555;">
+<p>Dear Ms. Berger,</p>
+<p>Thank you for the quotation. Before we place the order, could you confirm whether all three positions can be delivered by 30 September? We also noticed that the unit price for the enclosures differs from the one discussed in July &ndash; is that a typo or an updated price?</p>
+<p>Kind regards,<br>John Doe<br>Acme Ltd.</p>
+</blockquote>
+</body></html>

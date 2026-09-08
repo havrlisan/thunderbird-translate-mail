@@ -1,46 +1,71 @@
 # Translate Mail
 
-Thunderbird add-on (128+) that adds a **Translate** button to the message header toolbar and a **Translate reply** button to the compose toolbar. One click translates the subject and body of the message you are reading into your language, in place; click again to show the original. Bring your own API key for one of:
+Thunderbird add-on (128+) that translates the message you are reading into your language, and your reply into theirs. Bring your own API key for DeepL, Microsoft Translator, Google Cloud Translation or Yandex Translate.
 
-| Provider | Where to get credentials | Free tier |
+[Install from addons.thunderbird.net](https://addons.thunderbird.net/thunderbird/addon/translate-mail/)
+
+![A German supplier email as received, with the Translate button in the message header toolbar](images/before-translate.png)
+
+![The same message translated in place: subject, body, list and table are translated, the signature and quoted reply are left alone](images/after-translate.png)
+
+## Reading
+
+- **Translate** in the message header toolbar (or **Ctrl+Shift+X**) translates subject and body in place. Click again (**Show original**) to switch back.
+- **Translate selection** in the right-click menu translates only the selected part, quoted text included.
+- Quoted replies, signatures and forwarded-message headers are skipped by default so they do not eat quota. Enable **Also translate quoted text and signatures** in the settings to include them.
+- Hard-wrapped lines in plain-text messages are joined before translation so sentences are not translated as fragments. Lines shorter than 40 characters, indented lines and list items are left alone.
+- Translations are cached locally (200 most recent), so reopening a message is free.
+
+## Replying
+
+![The Translate reply popup in the compose window: pick the recipient's language and, with DeepL, a formal or informal tone](images/compose-popup.png)
+
+- **Translate reply** in the compose toolbar (or **Ctrl+Shift+E**) translates what you wrote into the language of the message you are answering. The language is preselected when you translated that message.
+- Select some text first to translate only that.
+- Your text is sent as HTML, so bold text and links stay in place and sentences are translated whole. Quoted text, your signature, bare links and e-mail addresses are left alone. The subject is not touched.
+- The translation goes through the editor, so **Ctrl+Z** undoes it.
+- With DeepL, the popup also offers a **Tone** (Default / Formal / Informal), remembered for the next reply.
+
+## Settings
+
+![Add-on settings: choose a provider, paste your API key, pick your language, and see how much of this month's DeepL quota is used](images/options.png)
+
+| Provider | Credentials | Free tier |
 |---|---|---|
 | DeepL | https://www.deepl.com/pro-api → API key (free keys end in `:fx`) | 500 000 chars/month |
-| Microsoft Translator | Azure portal → Translator resource → Keys and Endpoint (key + region) | 2 000 000 chars/month (F0) |
-| Google Cloud Translation | Google Cloud console → enable Cloud Translation API → API key | billed (500 000 chars/month free with billing enabled) |
+| Microsoft Translator | Azure portal → Translator resource → key + region | 2 000 000 chars/month (F0) |
+| Google Cloud Translation | Google Cloud console → enable Cloud Translation API → API key | 500 000 chars/month with billing enabled |
 | Yandex Translate | Yandex Cloud console → service account API key + folder ID | trial grant only |
 
-The button is also bound to **Ctrl+Shift+X** (change it under Add-ons and Themes → gear → Manage Extension Shortcuts). To translate only part of a message, select it and pick **Translate selection** from the right-click menu: that part is replaced in place (quoted text included), the button reads Show original, and the next Translate click does the whole message again.
+- Message text is sent to the selected Provider **only when you click Translate**.
+- Translating more than 20 000 characters at once asks first. Adjust the threshold in the settings, 0 turns it off.
+- With DeepL the settings show how much of this month's quota is used.
+- Not every Provider supports every target language. Unsupported combinations show the Provider's error in a popup.
+- Shortcuts can be changed under Add-ons and Themes → gear → Manage Extension Shortcuts.
 
-In a compose window, the **Translate reply** button translates what you wrote into the language of the message you are answering (preselected when you translated that message; pick any language otherwise). Select some text first to translate only that. Your reply is sent with its own formatting (as HTML), so bold text and links stay where they are and sentences are translated whole. Quoted text and your signature are left alone unless you selected them. Bare links and e-mail addresses on their own are skipped. The subject is not touched, and the translation is written through the editor, so **Ctrl+Z** undoes it and Ctrl+Y brings it back. With DeepL the popup also has a **Tone** choice (Default / Formal / Informal), remembered for the next reply; languages without a formal/informal distinction get the default. The button is bound to **Ctrl+Shift+E**.
-
-Message text is sent to the selected Provider **only when you click Translate**. Translations are cached locally (200 most recent) so reopening a message is free.
-
-Quoted replies, signatures and forwarded-message headers are skipped by default — they have already been read and would eat into free-tier quota. Turn on **Also translate quoted text and signatures** in the add-on settings to include them.
-
-Translating more than 20 000 characters at once (adjustable in the add-on settings, 0 turns it off) asks first (`Translate 24,312 characters?`) in a small window, or in the Translate reply popup. With DeepL, the add-on settings also show how much of this month's quota is used.
-
-Hard-wrapped lines in plain-text messages are joined before translation so sentences are not translated as fragments; lines shorter than 40 characters, indented lines and list items are left alone, so a long address or table line can occasionally be merged with the next one in the translated view (the original is never modified).
-
-Not every Provider supports every target language; unsupported combinations show the Provider's error in a popup window.
-
-## Install
-
-Install from [addons.thunderbird.net](https://addons.thunderbird.net/thunderbird/addon/translate-mail/).
-
-## Install for development
-
-Thunderbird → Tools → Add-ons and Themes → gear icon → **Debug Add-ons** → **Load Temporary Add-on** → choose `manifest.json`. Then open the add-on's Preferences, pick a Provider, paste the key, choose the target language.
-
-## Tests
+## Development
 
 ```
-npm test
+npm test                    # unit tests (node --test)
+python scripts/package.py   # writes translate-mail-<version>.xpi
 ```
 
-## Package
+Load unpacked: Add-ons and Themes → gear → **Debug Add-ons** → **Load Temporary Add-on** → `manifest.json`. Then open the add-on's Preferences, pick a Provider and paste a key.
 
-```
-python scripts/package.py
-```
+Test the packaged `.xpi` via Add-ons and Themes → gear → **Install Add-on From File**; toolbar icons render differently in a temporary load. The manual checklist is in [docs/smoke-test.md](docs/smoke-test.md), and [images/sample-email.eml](images/sample-email.eml) is a demo message (File → Open → Saved Message).
 
-Writes `translate-mail-<version>.xpi` in the repo root (PowerShell's `Compress-Archive` is avoided on purpose: it writes backslash entry names, which Thunderbird rejects). Upload the `.xpi` to addons.thunderbird.net, or install it locally via Add-ons and Themes → gear → Install Add-on From File.
+`package.py` zips `icons/`, `_locales/` and `src/` wholesale, so keep non-runtime assets out of those directories. PowerShell's `Compress-Archive` is avoided on purpose: it writes backslash entry names, which Thunderbird rejects.
+
+Layout:
+
+| Path | What |
+|---|---|
+| `src/background.js` | toolbar buttons, commands, orchestration |
+| `src/content.js` | in-place translation of the message view and compose editor |
+| `src/providers.js` | DeepL, Microsoft, Google, Yandex clients |
+| `src/text.js` | segmenting, skip rules, line joining |
+| `src/cache.js` | local translation cache |
+| `src/languages.js` | target language list |
+| `src/theme.js` | follow Thunderbird's theme colours on extension pages |
+| `src/options.*`, `src/compose.*`, `src/dialog.*` | settings page, reply popup, error window |
+| `_locales/` | UI strings |
